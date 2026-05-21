@@ -2517,6 +2517,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/usage") {
+				this.editor.setText("");
+				await this.handleUsageCommand();
+				return;
+			}
 			if (text === "/memory") {
 				this.handleMemoryCommand();
 				this.editor.setText("");
@@ -5229,6 +5234,50 @@ export class InteractiveMode {
 		if (stats.cost > 0) {
 			info += `\n${theme.bold("Cost")}\n`;
 			info += `${theme.fg("dim", "Total:")} ${stats.cost.toFixed(4)}`;
+		}
+
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(new Text(info, 1, 0));
+		this.ui.requestRender();
+	}
+
+	private async handleUsageCommand(): Promise<void> {
+		this.showStatus("Loading usage stats...");
+		this.ui.requestRender();
+
+		const stats = await this.session.getUsageStats();
+		if (stats.sessions === 0) {
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("dim", "No session data found."), 1, 0));
+			this.ui.requestRender();
+			return;
+		}
+
+		let info = `${theme.bold("Usage Across All Sessions")}\n\n`;
+		info += `${theme.fg("dim", "Sessions:")} ${stats.sessions}\n`;
+		info += `${theme.fg("dim", "Input:")} ${stats.input.toLocaleString()}\n`;
+		info += `${theme.fg("dim", "Output:")} ${stats.output.toLocaleString()}\n`;
+		if (stats.cacheRead > 0) {
+			info += `${theme.fg("dim", "Cache Read:")} ${stats.cacheRead.toLocaleString()}\n`;
+		}
+		if (stats.cacheWrite > 0) {
+			info += `${theme.fg("dim", "Cache Write:")} ${stats.cacheWrite.toLocaleString()}\n`;
+		}
+		const totalTokens = stats.input + stats.output + stats.cacheRead + stats.cacheWrite;
+		info += `${theme.fg("dim", "Total Tokens:")} ${totalTokens.toLocaleString()}\n`;
+		if (stats.cost > 0) {
+			info += `${theme.fg("dim", "Cost:")} $${stats.cost.toFixed(4)}\n`;
+		}
+
+		// Show top sessions by cost
+		const topN = Math.min(stats.bySession.length, 5);
+		info += `\n${theme.bold(`Top ${topN} Sessions`)}\n`;
+		for (let i = 0; i < topN; i++) {
+			const s = stats.bySession[i];
+			if (!s || s.cost <= 0) continue;
+			const label = s.name ?? s.cwd ?? s.id.slice(0, 8);
+			const shortLabel = label.length > 30 ? `${label.slice(0, 28)}...` : label;
+			info += `${theme.fg("dim", `${shortLabel}:`)} $${s.cost.toFixed(4)}\n`;
 		}
 
 		this.chatContainer.addChild(new Spacer(1));

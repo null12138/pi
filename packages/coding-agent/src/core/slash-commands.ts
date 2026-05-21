@@ -26,6 +26,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "name", description: "Set session display name" },
 	{ name: "goal", description: "Set session goal" },
 	{ name: "session", description: "Show session info and stats" },
+	{ name: "usage", description: "Show token usage and cost across all sessions" },
 	{ name: "memory", description: "View or edit project memory (MEMORY.md)" },
 	{ name: "changelog", description: "Show changelog entries" },
 	{ name: "hotkeys", description: "Show all keyboard shortcuts" },

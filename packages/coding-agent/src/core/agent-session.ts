@@ -74,8 +74,19 @@ import type { BashExecutionMessage, CustomMessage } from "./messages.ts";
 import type { ModelRegistry } from "./model-registry.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
-import type { BranchSummaryEntry, CompactionEntry, SessionManager } from "./session-manager.ts";
-import { CURRENT_SESSION_VERSION, getLatestCompactionEntry, type SessionHeader } from "./session-manager.ts";
+import type {
+	BranchSummaryEntry,
+	CompactionEntry,
+	SessionListProgress,
+	SessionManager,
+	UsageStats,
+} from "./session-manager.ts";
+import {
+	CURRENT_SESSION_VERSION,
+	getLatestCompactionEntry,
+	type SessionHeader,
+	SessionManager as SessionManagerCtor,
+} from "./session-manager.ts";
 import type { SettingsManager } from "./settings-manager.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
@@ -2891,6 +2902,7 @@ export class AgentSession {
 	 * Get session statistics.
 	 */
 	getSessionStats(): SessionStats {
+		// ... existing implementation unchanged
 		const state = this.state;
 		const userMessages = state.messages.filter((m) => m.role === "user").length;
 		const assistantMessages = state.messages.filter((m) => m.role === "assistant").length;
@@ -2933,6 +2945,10 @@ export class AgentSession {
 			cost: totalCost,
 			contextUsage: this.getContextUsage(),
 		};
+	}
+
+	async getUsageStats(onProgress?: SessionListProgress): Promise<UsageStats> {
+		return await SessionManagerCtor.getUsageStats(onProgress);
 	}
 
 	getContextUsage(): ContextUsage | undefined {

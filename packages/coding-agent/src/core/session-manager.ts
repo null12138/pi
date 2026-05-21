@@ -181,6 +181,27 @@ export interface SessionInfo {
 	allMessagesText: string;
 }
 
+export interface SessionUsageEntry {
+	path: string;
+	id: string;
+	cwd: string;
+	name?: string;
+	messageCount: number;
+	assistantMessageCount: number;
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	cost: number;
+}
+
+export interface UsageStats {
+	sessions: number;
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cost: number;
+	bySession: SessionUsageEntry[];
+}
+
 export type ReadonlySessionManager = Pick<
 	SessionManager,
 	| "getCwd"
@@ -615,6 +636,121 @@ async function buildSessionInfo(filePath: string): Promise<SessionInfo | null> {
 	} catch {
 		return null;
 	}
+}
+
+async function buildSessionUsage(filePath: string): Promise<SessionUsageEntry | null> {
+	try {
+		const content = await readFile(filePath, "utf8");
+		const lines = content.trim().split("\n");
+
+		if (lines.length === 0) return null;
+
+		const firstEntry = JSON.parse(lines[0]) as Record<string, unknown>;
+		if (firstEntry.type !== "session") return null;
+
+		const cwd = typeof firstEntry.cwd === "string" ? firstEntry.cwd : "";
+		const sessionId = firstEntry.id as string;
+
+		let messageCount = 0;
+		let assistantMessageCount = 0;
+		let input = 0;
+		let output = 0;
+		let cacheRead = 0;
+		let cacheWrite = 0;
+		let cost = 0;
+		let name: string | undefined;
+
+		for (const line of lines) {
+			if (!line.trim()) continue;
+			let entry: Record<string, unknown>;
+			try {
+				entry = JSON.parse(line);
+			} catch {
+				continue;
+			}
+
+			if (entry.type === "session_info") {
+				const infoEntry = entry as unknown as SessionInfoEntry;
+				if (typeof infoEntry.name === "string") {
+					const n = infoEntry.name;
+					if (n) name = n.trim() || undefined;
+				}
+			}
+
+			if (entry.type !== "message") continue;
+			messageCount++;
+
+			const message = entry.message as Record<string, unknown> | undefined;
+			if (!message || message.role !== "assistant") continue;
+			assistantMessageCount++;
+
+			const usage = message.usage as Record<string, unknown> | undefined;
+			if (!usage) continue;
+
+			input += (usage.input as number) || 0;
+			output += (usage.output as number) || 0;
+			cacheRead += (usage.cacheRead as number) || 0;
+			cacheWrite += (usage.cacheWrite as number) || 0;
+			const usageCost = usage.cost as { total?: number } | undefined;
+			cost += usageCost?.total || 0;
+		}
+
+		return {
+			path: filePath,
+			id: sessionId,
+			cwd,
+			name,
+			messageCount,
+			assistantMessageCount,
+			tokens: { input, output, cacheRead, cacheWrite },
+			cost,
+		};
+	} catch {
+		return null;
+	}
+}
+
+async function buildSessionUsagesWithConcurrency(
+	files: string[],
+	onProgress?: SessionListProgress,
+): Promise<(SessionUsageEntry | null)[]> {
+	const results: (SessionUsageEntry | null)[] = new Array(files.length).fill(null);
+	const total = files.length;
+	let loaded = 0;
+	const inFlight = new Set<Promise<void>>();
+	let nextIndex = 0;
+
+	const startNext = (): void => {
+		const index = nextIndex++;
+		const file = files[index];
+		if (!file) return;
+
+		let task: Promise<void>;
+		task = buildSessionUsage(file)
+			.then((entry) => {
+				results[index] = entry;
+			})
+			.catch(() => {
+				results[index] = null;
+			})
+			.finally(() => {
+				inFlight.delete(task);
+				loaded++;
+				onProgress?.(loaded, total);
+			});
+		inFlight.add(task);
+	};
+
+	while (nextIndex < files.length || inFlight.size > 0) {
+		while (nextIndex < files.length && inFlight.size < MAX_CONCURRENT_SESSION_INFO_LOADS) {
+			startNext();
+		}
+		if (inFlight.size > 0) {
+			await Promise.race(inFlight);
+		}
+	}
+
+	return results;
 }
 
 export type SessionListProgress = (loaded: number, total: number) => void;
@@ -1480,6 +1616,61 @@ export class SessionManager {
 			return sessions;
 		} catch {
 			return [];
+		}
+	}
+
+	static async getUsageStats(onProgress?: SessionListProgress): Promise<UsageStats> {
+		const sessionsDir = getSessionsDir();
+		const empty = { sessions: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, bySession: [] };
+
+		try {
+			if (!existsSync(sessionsDir)) {
+				return empty;
+			}
+			const entries = await readdir(sessionsDir, { withFileTypes: true });
+			const dirs = entries.filter((e) => e.isDirectory()).map((e) => join(sessionsDir, e.name));
+
+			const allFiles: string[] = [];
+			for (const dir of dirs) {
+				try {
+					const files = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+					allFiles.push(...files.map((f) => join(dir, f)));
+				} catch {
+					// skip broken dirs
+				}
+			}
+
+			const results = await buildSessionUsagesWithConcurrency(allFiles, onProgress);
+			const bySession: SessionUsageEntry[] = [];
+
+			let totalInput = 0;
+			let totalOutput = 0;
+			let totalCacheRead = 0;
+			let totalCacheWrite = 0;
+			let totalCost = 0;
+
+			for (const entry of results) {
+				if (!entry) continue;
+				bySession.push(entry);
+				totalInput += entry.tokens.input;
+				totalOutput += entry.tokens.output;
+				totalCacheRead += entry.tokens.cacheRead;
+				totalCacheWrite += entry.tokens.cacheWrite;
+				totalCost += entry.cost;
+			}
+
+			bySession.sort((a, b) => b.cost - a.cost);
+			return {
+				sessions: bySession.length,
+				input: totalInput,
+				output: totalOutput,
+				cacheRead: totalCacheRead,
+				cacheWrite: totalCacheWrite,
+				cost: totalCost,
+				bySession,
+			};
+		} catch {
+			return empty;
 		}
 	}
 }
