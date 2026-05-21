@@ -55,7 +55,9 @@ import {
 	getAuthPath,
 	getDebugLogPath,
 	getDocsPath,
+	getSelfUpdateCommand,
 	getShareViewerUrl,
+	PACKAGE_NAME,
 	VERSION,
 } from "../../config.ts";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "../../core/agent-session.ts";
@@ -2596,6 +2598,11 @@ export class InteractiveMode {
 			if (text === "/resume") {
 				this.showSessionSelector();
 				this.editor.setText("");
+				return;
+			}
+			if (text === "/update") {
+				this.editor.setText("");
+				await this.handleUpdateCommand();
 				return;
 			}
 			if (text === "/quit") {
@@ -5283,6 +5290,41 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(info, 1, 0));
 		this.ui.requestRender();
+	}
+
+	private async handleUpdateCommand(): Promise<void> {
+		const npmCommand = this.settingsManager.getGlobalSettings().npmCommand;
+		const selfUpdate = getSelfUpdateCommand(PACKAGE_NAME, npmCommand);
+
+		if (!selfUpdate) {
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(
+				new Text(theme.fg("dim", `Self-update is not available for this installation. Run: pi update pi`), 1, 0),
+			);
+			this.ui.requestRender();
+			return;
+		}
+
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(
+			new Text(theme.fg("dim", `Updating ${APP_NAME} v${VERSION} with ${selfUpdate.display}...`), 1, 0),
+		);
+		this.ui.requestRender();
+
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
+		this.stop();
+		await this.runtimeHost.dispose();
+
+		for (const step of selfUpdate.steps ?? [selfUpdate]) {
+			console.log(`\n  ${step.display}`);
+			const child = spawn(step.command, step.args, { stdio: "inherit" });
+			await new Promise<void>((resolve, reject) => {
+				child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`exit ${code}`))));
+			});
+		}
+		console.log(`\n${APP_NAME} updated. Restart pi.`);
+		process.exit(0);
 	}
 
 	private handleMemoryCommand(): void {
