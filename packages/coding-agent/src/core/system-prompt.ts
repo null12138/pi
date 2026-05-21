@@ -134,7 +134,9 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	// Always include these
 	addGuideline("Be concise in your responses");
 	addGuideline("Show file paths clearly when working with files");
-	addGuideline("Save important project learnings (build commands, debugging insights, architecture notes, code style preferences) to .pi/memory/MEMORY.md so they persist across sessions. Read MEMORY.md first when starting new work.");
+	addGuideline(
+		"Save important project learnings (build commands, debugging insights, architecture notes, code style preferences) to .pi/memory/MEMORY.md so they persist across sessions. Read MEMORY.md first when starting new work.",
+	);
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 

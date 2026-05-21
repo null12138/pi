@@ -236,9 +236,7 @@ describe("detectInstallMethod", () => {
 
 		const command = getSelfUpdateCommand("@openeryc/pi-coding-agent");
 
-		expect(command?.display).toBe(
-			`npm --prefix "${prefix}" install -g --ignore-scripts @openeryc/pi-coding-agent`,
-		);
+		expect(command?.display).toBe(`npm --prefix "${prefix}" install -g --ignore-scripts @openeryc/pi-coding-agent`);
 	});
 
 	test("does not infer Windows npm custom prefixes from package paths", () => {

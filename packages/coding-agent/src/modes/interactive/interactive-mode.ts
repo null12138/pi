@@ -5252,13 +5252,9 @@ export class InteractiveMode {
 			);
 		} else {
 			this.chatContainer.addChild(new DynamicBorder());
-			this.chatContainer.addChild(
-				new Text(theme.bold(theme.fg("accent", "Project Memory")), 1, 0),
-			);
+			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "Project Memory")), 1, 0));
 			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(
-				new Text(theme.fg("dim", `Source: ${memoryPath}`), 1, 0),
-			);
+			this.chatContainer.addChild(new Text(theme.fg("dim", `Source: ${memoryPath}`), 1, 0));
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(new Markdown(memory, 1, 1, this.getMarkdownThemeWithSettings()));
 			this.chatContainer.addChild(new DynamicBorder());

@@ -1,12 +1,12 @@
 {
 	"name": "@openeryc/pi-coding-agent",
-	"version": "0.75.5",
+	"version": "0.75.6",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@openeryc/pi-coding-agent",
-			"version": "0.75.5",
+			"version": "0.75.6",
 			"license": "MIT",
 			"dependencies": {
 				"@openeryc/pi-agent-core": "^0.75.5",
