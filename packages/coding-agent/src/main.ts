@@ -286,6 +286,11 @@ async function createSessionManager(
 		return SessionManager.continueRecent(cwd, sessionDir);
 	}
 
+	// Web mode: default to continuing the most recent session instead of creating a new one
+	if (parsed.mode === "web" && sessionDir === undefined) {
+		return SessionManager.continueRecent(cwd, sessionDir);
+	}
+
 	return SessionManager.create(cwd, sessionDir);
 }
 
