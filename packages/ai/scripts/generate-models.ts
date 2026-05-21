@@ -1115,6 +1115,12 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 }
 
 async function generateModels() {
+	// Skip network fetches in offline/CI mode — use existing generated file
+	if (process.env.PI_OFFLINE) {
+		console.log("PI_OFFLINE is set, skipping model generation.");
+		return;
+	}
+
 	// Fetch models from both sources
 	// models.dev: Anthropic, Google, OpenAI, Groq, Cerebras
 	// OpenRouter: xAI and other providers (excluding Anthropic, Google, OpenAI)

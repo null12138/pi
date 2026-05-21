@@ -38,6 +38,8 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Build binaries
+        env:
+          PI_OFFLINE: "1"
         run: ./scripts/build-binaries.sh
 
       - name: Extract changelog for this version

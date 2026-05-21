@@ -118,6 +118,10 @@ ${providerEntries}
 }
 
 async function main(): Promise<void> {
+	if (process.env.PI_OFFLINE) {
+		console.log("PI_OFFLINE is set, skipping image model generation.");
+		return;
+	}
 	const models = await fetchOpenRouterImageModels();
 	const output = generateImageModelsFile(models);
 	const outputPath = join(packageRoot, "src", "image-models.generated.ts");
