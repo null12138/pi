@@ -685,6 +685,7 @@ export async function main(args: string[], options?: MainOptions) {
 	} else if (appMode === "web") {
 		printTimings();
 		console.log("Starting web UI...");
+		if (parsed.webPassword) process.env.PI_WEB_PASSWORD = parsed.webPassword;
 		await runWebMode(runtime);
 	} else if (appMode === "interactive") {
 		const interactiveMode = new InteractiveMode(runtime, {
