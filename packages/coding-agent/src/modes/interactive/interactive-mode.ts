@@ -2510,8 +2510,7 @@ export class InteractiveMode {
 			}
 			if (text === "/goal" || text.startsWith("/goal ")) {
 				this.handleGoalCommand(text);
-				this.editor.setText("");
-				return;
+				// Don't return — let the normal submit flow run so the agent starts working
 			}
 			if (text === "/session") {
 				this.handleSessionCommand();

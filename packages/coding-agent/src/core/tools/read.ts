@@ -30,7 +30,7 @@ export interface ReadToolDetails {
 }
 
 interface CompactReadClassification {
-	kind: "docs" | "resource" | "skill";
+	kind: "docs" | "file" | "resource" | "skill";
 	label: string;
 }
 
@@ -137,7 +137,7 @@ function getCompactReadClassification(
 		return { kind: "resource", label: formatPathRelativeToCwdOrAbsolute(absolutePath, cwd) };
 	}
 
-	return undefined;
+	return { kind: "file", label: fileName };
 }
 
 function formatCompactReadCall(
@@ -150,6 +150,16 @@ function formatCompactReadCall(
 		return (
 			theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m `) +
 			theme.fg("customMessageText", classification.label) +
+			formatReadLineRange(args, theme) +
+			expandHint
+		);
+	}
+
+	if (classification.kind === "file") {
+		return (
+			theme.fg("toolTitle", theme.bold("read")) +
+			" " +
+			theme.fg("accent", classification.label) +
 			formatReadLineRange(args, theme) +
 			expandHint
 		);
