@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- All read tool calls now show a compact label (just the filename) when collapsed, not only special files like SKILL.md or AGENTS.md.
+
+### Fixed
+
+- `/goal` command now starts the agent working on the set goal instead of only setting metadata.
+
 ## [0.75.8] - 2026-05-21
 
 ### Changed
