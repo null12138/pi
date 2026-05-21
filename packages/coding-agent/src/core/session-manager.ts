@@ -13,7 +13,7 @@ import {
 	statSync,
 	writeFileSync,
 } from "fs";
-import { readdir, readFile, stat } from "fs/promises";
+import { readdir, readFile, rmdir, stat, unlink } from "fs/promises";
 import { join, resolve } from "path";
 import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import {
@@ -1671,6 +1671,50 @@ export class SessionManager {
 			};
 		} catch {
 			return empty;
+		}
+	}
+
+	static async cleanupOldSessions(retentionDays: number): Promise<number> {
+		if (retentionDays <= 0) return 0;
+		const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+		const sessionsDir = getSessionsDir();
+
+		try {
+			if (!existsSync(sessionsDir)) return 0;
+			const entries = await readdir(sessionsDir, { withFileTypes: true });
+			const dirs = entries.filter((e) => e.isDirectory()).map((e) => join(sessionsDir, e.name));
+
+			let deleted = 0;
+			for (const dir of dirs) {
+				try {
+					const files = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
+					for (const file of files) {
+						const fullPath = join(dir, file);
+						try {
+							const stats = await stat(fullPath);
+							if (stats.mtime.getTime() < cutoff) {
+								await unlink(fullPath);
+								deleted++;
+							}
+						} catch {
+							// skip files we can't stat or delete
+						}
+					}
+					try {
+						const remaining = await readdir(dir);
+						if (remaining.length === 0) {
+							await rmdir(dir);
+						}
+					} catch {
+						// ignore
+					}
+				} catch {
+					// skip broken dirs
+				}
+			}
+			return deleted;
+		} catch {
+			return 0;
 		}
 	}
 }

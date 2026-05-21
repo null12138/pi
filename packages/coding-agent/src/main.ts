@@ -623,6 +623,15 @@ export async function main(args: string[], options?: MainOptions) {
 	const { settingsManager, modelRegistry, resourceLoader } = services;
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
+	// Clean up old sessions
+	const retentionDays = settingsManager.getProjectSettings().sessionRetentionDays;
+	if (retentionDays && retentionDays > 0) {
+		const deleted = await SessionManager.cleanupOldSessions(retentionDays);
+		if (deleted > 0) {
+			console.error(chalk.dim(`Cleaned up ${deleted} old session(s) (older than ${retentionDays} days).`));
+		}
+	}
+
 	if (parsed.help) {
 		const extensionFlags = resourceLoader
 			.getExtensions()

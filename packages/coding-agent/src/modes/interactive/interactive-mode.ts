@@ -2575,6 +2575,11 @@ export class InteractiveMode {
 				await this.handleCompactCommand(customInstructions);
 				return;
 			}
+			if (text === "/cleanup") {
+				this.editor.setText("");
+				await this.handleCleanupCommand();
+				return;
+			}
 			if (text === "/reload") {
 				this.editor.setText("");
 				await this.handleReloadCommand();
@@ -5325,6 +5330,29 @@ export class InteractiveMode {
 		}
 		console.log(`\n${APP_NAME} updated. Restart pi.`);
 		process.exit(0);
+	}
+
+	private async handleCleanupCommand(): Promise<void> {
+		const retentionDays = this.settingsManager.getProjectSettings().sessionRetentionDays ?? 30;
+		this.showStatus(`Cleaning up sessions older than ${retentionDays} days...`);
+		this.ui.requestRender();
+
+		const deleted = await SessionManager.cleanupOldSessions(retentionDays);
+
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(
+			new Text(
+				theme.fg(
+					"dim",
+					deleted > 0
+						? `Cleaned up ${deleted} session(s) older than ${retentionDays} days.`
+						: `No sessions older than ${retentionDays} days to clean up.`,
+				),
+				1,
+				0,
+			),
+		);
+		this.ui.requestRender();
 	}
 
 	private handleMemoryCommand(): void {
