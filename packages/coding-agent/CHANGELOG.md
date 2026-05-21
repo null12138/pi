@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `/usage` command shows token usage and cost aggregated across all sessions, with a top-5 breakdown by cost.
+
 ## [0.75.9] - 2026-05-21
 
 ### Changed
