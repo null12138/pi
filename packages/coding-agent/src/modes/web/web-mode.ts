@@ -156,7 +156,7 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 	});
 
 	await new Promise<void>((resolve, reject) => {
-		server.listen(port, "127.0.0.1", () => resolve());
+		server.listen(port, "0.0.0.0", () => resolve());
 		server.on("error", reject);
 	});
 
@@ -166,12 +166,13 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 		return;
 	}
 
-	const host = `http://127.0.0.1:${addr.port}`;
+	const consolePort = `http://127.0.0.1:${addr.port}`;
 	const lan = getLocalIP();
-	console.log(`\n  pi web UI:  ${host}`);
+	console.log(`\n  pi web UI:  ${consolePort}`);
 	if (lan !== "127.0.0.1") {
 		console.log(`  LAN:        http://${lan}:${addr.port}`);
 	}
+	console.log("  (listening on all interfaces)");
 	console.log();
 
 	// Keep process alive
