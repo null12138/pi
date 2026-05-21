@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Tool outputs now auto-collapse on completion: full output is shown during streaming, compact view after the tool finishes. Press `Ctrl+O` to expand.
+
 ## [0.75.5] - 2026-05-21
 
 ## [0.75.4] - 2026-05-20
