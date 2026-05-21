@@ -607,6 +607,15 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "set_session_name");
 			}
 
+			case "set_session_goal": {
+				const goal = command.goal.trim();
+				if (!goal) {
+					return error(id, "set_session_goal", "Session goal cannot be empty");
+				}
+				session.setSessionGoal(goal);
+				return success(id, "set_session_goal");
+			}
+
 			// =================================================================
 			// Messages
 			// =================================================================

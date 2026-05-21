@@ -1,5 +1,5 @@
-import { type AgentMessage, uuidv7 } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Message, TextContent } from "@earendil-works/pi-ai";
+import { type AgentMessage, uuidv7 } from "@openeryc/pi-agent-core";
+import type { ImageContent, Message, TextContent } from "@openeryc/pi-ai";
 import { randomUUID } from "crypto";
 import {
 	appendFileSync,
@@ -107,10 +107,11 @@ export interface LabelEntry extends SessionEntryBase {
 	label: string | undefined;
 }
 
-/** Session metadata entry (e.g., user-defined display name). */
+/** Session metadata entry (e.g., user-defined display name, goal). */
 export interface SessionInfoEntry extends SessionEntryBase {
 	type: "session_info";
 	name?: string;
+	goal?: string;
 }
 
 /**
@@ -195,6 +196,7 @@ export type ReadonlySessionManager = Pick<
 	| "getEntries"
 	| "getTree"
 	| "getSessionName"
+	| "getSessionGoal"
 >;
 
 function createSessionId(): string {
@@ -966,6 +968,31 @@ export class SessionManager {
 			const entry = entries[i];
 			if (entry.type === "session_info") {
 				return entry.name?.trim() || undefined;
+			}
+		}
+		return undefined;
+	}
+
+	/** Append a session goal entry. Returns entry id. */
+	appendSessionGoal(goal: string): string {
+		const entry: SessionInfoEntry = {
+			type: "session_info",
+			id: generateId(this.byId),
+			parentId: this.leafId,
+			timestamp: new Date().toISOString(),
+			goal: goal.trim(),
+		};
+		this._appendEntry(entry);
+		return entry.id;
+	}
+
+	/** Get the current session goal from the latest session_info entry with a goal, if any. */
+	getSessionGoal(): string | undefined {
+		const entries = this.getEntries();
+		for (let i = entries.length - 1; i >= 0; i--) {
+			const entry = entries[i];
+			if (entry.type === "session_info" && entry.goal?.trim()) {
+				return entry.goal.trim();
 			}
 		}
 		return undefined;

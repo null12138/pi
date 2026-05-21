@@ -5,9 +5,9 @@
  * and after compaction the session is reloaded.
  */
 
-import type { AgentMessage, StreamFn, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai";
-import { completeSimple } from "@earendil-works/pi-ai";
+import type { AgentMessage, StreamFn, ThinkingLevel } from "@openeryc/pi-agent-core";
+import type { AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@openeryc/pi-ai";
+import { completeSimple } from "@openeryc/pi-ai";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,
@@ -453,6 +453,9 @@ export function findCutPoint(
 
 const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
 
+If <session-goal> is provided before the conversation, use it as the primary goal for the ## Goal section.
+If <project-memory> is provided, preserve key information from it in ## Critical Context.
+
 Use this EXACT format:
 
 ## Goal
@@ -485,6 +488,9 @@ Use this EXACT format:
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
 const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
+
+If <session-goal> is provided before the conversation, use it to guide the ## Goal section.
+If <project-memory> is provided, preserve key information from it in ## Critical Context.
 
 Update the existing structured summary with new information. RULES:
 - PRESERVE all existing information from the previous summary
@@ -566,6 +572,8 @@ export async function generateSummary(
 	previousSummary?: string,
 	thinkingLevel?: ThinkingLevel,
 	streamFn?: StreamFn,
+	goal?: string,
+	memory?: string,
 ): Promise<string> {
 	const maxTokens = Math.min(
 		Math.floor(0.8 * reserveTokens),
@@ -583,8 +591,15 @@ export async function generateSummary(
 	const llmMessages = convertToLlm(currentMessages);
 	const conversationText = serializeConversation(llmMessages);
 
-	// Build the prompt with conversation wrapped in tags
-	let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
+	// Build the prompt with conversation wrapped in tags, plus goal and memory context
+	let promptText = "";
+	if (goal) {
+		promptText += `<session-goal>\n${goal}\n</session-goal>\n\n`;
+	}
+	if (memory) {
+		promptText += `<project-memory>\n${memory}\n</project-memory>\n\n`;
+	}
+	promptText += `<conversation>\n${conversationText}\n</conversation>\n\n`;
 	if (previousSummary) {
 		promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
 	}
@@ -753,6 +768,8 @@ export async function compact(
 	signal?: AbortSignal,
 	thinkingLevel?: ThinkingLevel,
 	streamFn?: StreamFn,
+	goal?: string,
+	memory?: string,
 ): Promise<CompactionResult> {
 	const {
 		firstKeptEntryId,
@@ -783,6 +800,8 @@ export async function compact(
 						previousSummary,
 						thinkingLevel,
 						streamFn,
+						goal,
+						memory,
 					)
 				: Promise.resolve("No prior history."),
 			generateTurnPrefixSummary(
@@ -811,6 +830,8 @@ export async function compact(
 			previousSummary,
 			thinkingLevel,
 			streamFn,
+			goal,
+			memory,
 		);
 	}
 

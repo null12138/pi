@@ -7,7 +7,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentMessage } from "@openeryc/pi-agent-core";
 import {
 	type AssistantMessage,
 	getProviders,
@@ -16,7 +16,7 @@ import {
 	type Model,
 	type OAuthProviderId,
 	type OAuthSelectPrompt,
-} from "@earendil-works/pi-ai";
+} from "@openeryc/pi-ai";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -27,7 +27,7 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	SlashCommand,
-} from "@earendil-works/pi-tui";
+} from "@openeryc/pi-tui";
 import {
 	CombinedAutocompleteProvider,
 	type Component,
@@ -46,7 +46,7 @@ import {
 	TruncatedText,
 	TUI,
 	visibleWidth,
-} from "@earendil-works/pi-tui";
+} from "@openeryc/pi-tui";
 import { spawn, spawnSync } from "child_process";
 import {
 	APP_NAME,
@@ -2508,8 +2508,18 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/goal" || text.startsWith("/goal ")) {
+				this.handleGoalCommand(text);
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/session") {
 				this.handleSessionCommand();
+				this.editor.setText("");
+				return;
+			}
+			if (text === "/memory") {
+				this.handleMemoryCommand();
 				this.editor.setText("");
 				return;
 			}
@@ -5166,13 +5176,37 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	private handleGoalCommand(text: string): void {
+		const goal = text.replace(/^\/goal\s*/, "").trim();
+		if (!goal) {
+			const currentGoal = this.session.sessionGoal;
+			if (currentGoal) {
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(new Text(theme.fg("dim", `Session goal: ${currentGoal}`), 1, 0));
+			} else {
+				this.showWarning("Usage: /goal <goal description>");
+			}
+			this.ui.requestRender();
+			return;
+		}
+
+		this.session.setSessionGoal(goal);
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(new Text(theme.fg("dim", `Session goal set: ${goal}`), 1, 0));
+		this.ui.requestRender();
+	}
+
 	private handleSessionCommand(): void {
 		const stats = this.session.getSessionStats();
 		const sessionName = this.sessionManager.getSessionName();
+		const sessionGoal = this.sessionManager.getSessionGoal();
 
 		let info = `${theme.bold("Session Info")}\n\n`;
 		if (sessionName) {
 			info += `${theme.fg("dim", "Name:")} ${sessionName}\n`;
+		}
+		if (sessionGoal) {
+			info += `${theme.fg("dim", "Goal:")} ${sessionGoal}\n`;
 		}
 		info += `${theme.fg("dim", "File:")} ${stats.sessionFile ?? "In-memory"}\n`;
 		info += `${theme.fg("dim", "ID:")} ${stats.sessionId}\n\n`;
@@ -5200,6 +5234,35 @@ export class InteractiveMode {
 
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(info, 1, 0));
+		this.ui.requestRender();
+	}
+
+	private handleMemoryCommand(): void {
+		const memory = this.session.resourceLoader.getMemory();
+		const memoryPath = path.join(this.sessionManager.getCwd(), ".pi", "memory", "MEMORY.md");
+
+		this.chatContainer.addChild(new Spacer(1));
+		if (!memory) {
+			this.chatContainer.addChild(
+				new Text(
+					theme.fg("dim", `No project memory yet. The AI saves learnings to ${memoryPath} during sessions.`),
+					1,
+					0,
+				),
+			);
+		} else {
+			this.chatContainer.addChild(new DynamicBorder());
+			this.chatContainer.addChild(
+				new Text(theme.bold(theme.fg("accent", "Project Memory")), 1, 0),
+			);
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(
+				new Text(theme.fg("dim", `Source: ${memoryPath}`), 1, 0),
+			);
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Markdown(memory, 1, 1, this.getMarkdownThemeWithSettings()));
+			this.chatContainer.addChild(new DynamicBorder());
+		}
 		this.ui.requestRender();
 	}
 

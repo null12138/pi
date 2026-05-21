@@ -22,6 +22,8 @@ export interface BuildSystemPromptOptions {
 	contextFiles?: Array<{ path: string; content: string }>;
 	/** Pre-loaded skills. */
 	skills?: Skill[];
+	/** Project memory content (MEMORY.md). */
+	memory?: string;
 }
 
 /** Build the system prompt with tools, guidelines, and context */
@@ -35,6 +37,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		cwd,
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
+		memory,
 	} = options;
 	const resolvedCwd = cwd;
 	const promptCwd = resolvedCwd.replace(/\\/g, "/");
@@ -65,6 +68,11 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 				prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
 			}
 			prompt += "</project_context>\n";
+		}
+
+		// Append project memory (AI-learned across sessions)
+		if (memory) {
+			prompt += `\n<project_memory>\n${memory}\n</project_memory>\n`;
 		}
 
 		// Append skills section (only if read tool is available)
@@ -126,6 +134,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	// Always include these
 	addGuideline("Be concise in your responses");
 	addGuideline("Show file paths clearly when working with files");
+	addGuideline("Save important project learnings (build commands, debugging insights, architecture notes, code style preferences) to .pi/memory/MEMORY.md so they persist across sessions. Read MEMORY.md first when starting new work.");
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
@@ -160,6 +169,11 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 			prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
 		}
 		prompt += "</project_context>\n";
+	}
+
+	// Append project memory (AI-learned across sessions)
+	if (memory) {
+		prompt += `\n<project_memory>\n${memory}\n</project_memory>\n`;
 	}
 
 	// Append skills section (only if read tool is available)

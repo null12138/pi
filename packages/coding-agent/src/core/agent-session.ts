@@ -22,8 +22,8 @@ import type {
 	AgentState,
 	AgentTool,
 	ThinkingLevel,
-} from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@earendil-works/pi-ai";
+} from "@openeryc/pi-agent-core";
+import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@openeryc/pi-ai";
 import {
 	clampThinkingLevel,
 	cleanupSessionResources,
@@ -32,7 +32,7 @@ import {
 	modelsAreEqual,
 	resetApiProviders,
 	streamSimple,
-} from "@earendil-works/pi-ai";
+} from "@openeryc/pi-ai";
 import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -835,6 +835,11 @@ export class AgentSession {
 		return this.sessionManager.getSessionName();
 	}
 
+	/** Current session goal, if set */
+	get sessionGoal(): string | undefined {
+		return this.sessionManager.getSessionGoal();
+	}
+
 	/** Scoped models for cycling (from --models flag) */
 	get scopedModels(): ReadonlyArray<{ model: Model<any>; thinkingLevel?: ThinkingLevel }> {
 		return this._scopedModels;
@@ -906,6 +911,7 @@ export class AgentSession {
 			selectedTools: validToolNames,
 			toolSnippets,
 			promptGuidelines,
+			memory: this._resourceLoader.getMemory(),
 		};
 		return buildSystemPrompt(this._baseSystemPromptOptions);
 	}
@@ -1677,6 +1683,8 @@ export class AgentSession {
 					this._compactionAbortController.signal,
 					this.thinkingLevel,
 					this.agent.streamFn,
+					this.sessionManager.getSessionGoal(),
+					this._resourceLoader.getMemory(),
 				);
 				summary = result.summary;
 				firstKeptEntryId = result.firstKeptEntryId;
@@ -1950,6 +1958,8 @@ export class AgentSession {
 					this._autoCompactionAbortController.signal,
 					this.thinkingLevel,
 					this.agent.streamFn,
+					this.sessionManager.getSessionGoal(),
+					this._resourceLoader.getMemory(),
 				);
 				summary = compactResult.summary;
 				firstKeptEntryId = compactResult.firstKeptEntryId;
@@ -2190,6 +2200,12 @@ export class AgentSession {
 				},
 				getSessionName: () => {
 					return this.sessionManager.getSessionName();
+				},
+				setSessionGoal: (goal) => {
+					this.setSessionGoal(goal);
+				},
+				getSessionGoal: () => {
+					return this.sessionManager.getSessionGoal();
 				},
 				setLabel: (entryId, label) => {
 					this.sessionManager.appendLabelChange(entryId, label);
@@ -2635,6 +2651,14 @@ export class AgentSession {
 	 */
 	setSessionName(name: string): void {
 		this.sessionManager.appendSessionInfo(name);
+		this._emit({ type: "session_info_changed", name: this.sessionManager.getSessionName() });
+	}
+
+	/**
+	 * Set a goal for the current session.
+	 */
+	setSessionGoal(goal: string): void {
+		this.sessionManager.appendSessionGoal(goal);
 		this._emit({ type: "session_info_changed", name: this.sessionManager.getSessionName() });
 	}
 

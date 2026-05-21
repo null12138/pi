@@ -32,6 +32,7 @@ export interface ResourceLoader {
 	getPrompts(): { prompts: PromptTemplate[]; diagnostics: ResourceDiagnostic[] };
 	getThemes(): { themes: Theme[]; diagnostics: ResourceDiagnostic[] };
 	getAgentsFiles(): { agentsFiles: Array<{ path: string; content: string }> };
+	getMemory(): string | undefined;
 	getSystemPrompt(): string | undefined;
 	getAppendSystemPrompt(): string[];
 	extendResources(paths: ResourceExtensionPaths): void;
@@ -111,6 +112,28 @@ export function loadProjectContextFiles(options: {
 	contextFiles.push(...ancestorContextFiles);
 
 	return contextFiles;
+}
+
+function loadMemoryFile(cwd: string): string | undefined {
+	const memoryDir = join(cwd, ".pi", "memory");
+	const memoryPath = join(memoryDir, "MEMORY.md");
+	if (!existsSync(memoryPath)) return undefined;
+	try {
+		const content = readFileSync(memoryPath, "utf-8");
+		const lines = content.split("\n");
+		// Load first 200 lines or 25KB, whichever is hit first
+		let size = 0;
+		const included: string[] = [];
+		for (const line of lines) {
+			if (included.length >= 200) break;
+			included.push(line);
+			size += Buffer.byteLength(line, "utf-8") + 1;
+			if (size > 25000) break;
+		}
+		return included.join("\n");
+	} catch {
+		return undefined;
+	}
 }
 
 export interface DefaultResourceLoaderOptions {
@@ -195,6 +218,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private themes: Theme[];
 	private themeDiagnostics: ResourceDiagnostic[];
 	private agentsFiles: Array<{ path: string; content: string }>;
+	private memory?: string;
 	private systemPrompt?: string;
 	private appendSystemPrompt: string[];
 	private lastSkillPaths: string[];
@@ -269,6 +293,10 @@ export class DefaultResourceLoader implements ResourceLoader {
 
 	getAgentsFiles(): { agentsFiles: Array<{ path: string; content: string }> } {
 		return { agentsFiles: this.agentsFiles };
+	}
+
+	getMemory(): string | undefined {
+		return this.memory;
 	}
 
 	getSystemPrompt(): string | undefined {
@@ -457,6 +485,8 @@ export class DefaultResourceLoader implements ResourceLoader {
 		};
 		const resolvedAgentsFiles = this.agentsFilesOverride ? this.agentsFilesOverride(agentsFiles) : agentsFiles;
 		this.agentsFiles = resolvedAgentsFiles.agentsFiles;
+
+		this.memory = loadMemoryFile(this.cwd);
 
 		const baseSystemPrompt = resolvePromptInput(
 			this.systemPromptSource ?? this.discoverSystemPromptFile(),

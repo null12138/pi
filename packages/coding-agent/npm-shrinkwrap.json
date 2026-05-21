@@ -1,17 +1,17 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
+	"name": "@openeryc/pi-coding-agent",
 	"version": "0.75.4",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
-			"name": "@earendil-works/pi-coding-agent",
+			"name": "@openeryc/pi-coding-agent",
 			"version": "0.75.4",
 			"license": "MIT",
 			"dependencies": {
-				"@earendil-works/pi-agent-core": "^0.75.4",
-				"@earendil-works/pi-ai": "^0.75.4",
-				"@earendil-works/pi-tui": "^0.75.4",
+				"@openeryc/pi-agent-core": "^0.75.4",
+				"@openeryc/pi-ai": "^0.75.4",
+				"@openeryc/pi-tui": "^0.75.4",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -472,54 +472,6 @@
 				"node": ">=6.9.0"
 			}
 		},
-		"node_modules/@earendil-works/pi-agent-core": {
-			"version": "0.75.4",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-agent-core/-/pi-agent-core-0.75.4.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@earendil-works/pi-ai": "^0.75.4",
-				"ignore": "7.0.5",
-				"typebox": "1.1.38",
-				"yaml": "2.9.0"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/pi-ai": {
-			"version": "0.75.4",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-0.75.4.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"@anthropic-ai/sdk": "0.91.1",
-				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
-				"@google/genai": "1.52.0",
-				"@mistralai/mistralai": "2.2.1",
-				"http-proxy-agent": "7.0.2",
-				"https-proxy-agent": "7.0.6",
-				"openai": "6.26.0",
-				"partial-json": "0.1.7",
-				"typebox": "1.1.38"
-			},
-			"bin": {
-				"pi-ai": "./dist/cli.js"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
-		"node_modules/@earendil-works/pi-tui": {
-			"version": "0.75.4",
-			"resolved": "https://registry.npmjs.org/@earendil-works/pi-tui/-/pi-tui-0.75.4.tgz",
-			"license": "MIT",
-			"dependencies": {
-				"get-east-asian-width": "1.6.0",
-				"marked": "15.0.12"
-			},
-			"engines": {
-				"node": ">=22.19.0"
-			}
-		},
 		"node_modules/@google/genai": {
 			"version": "1.52.0",
 			"resolved": "https://registry.npmjs.org/@google/genai/-/genai-1.52.0.tgz",
@@ -745,6 +697,54 @@
 					"url": "https://github.com/sponsors/nodable"
 				}
 			]
+		},
+		"node_modules/@openeryc/pi-agent-core": {
+			"version": "0.75.4",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-agent-core/-/pi-agent-core-0.75.4.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@openeryc/pi-ai": "^0.75.4",
+				"ignore": "7.0.5",
+				"typebox": "1.1.38",
+				"yaml": "2.9.0"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/@openeryc/pi-ai": {
+			"version": "0.75.4",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-ai/-/pi-ai-0.75.4.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"@anthropic-ai/sdk": "0.91.1",
+				"@aws-sdk/client-bedrock-runtime": "3.1048.0",
+				"@google/genai": "1.52.0",
+				"@mistralai/mistralai": "2.2.1",
+				"http-proxy-agent": "7.0.2",
+				"https-proxy-agent": "7.0.6",
+				"openai": "6.26.0",
+				"partial-json": "0.1.7",
+				"typebox": "1.1.38"
+			},
+			"bin": {
+				"pi-ai": "./dist/cli.js"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
+		},
+		"node_modules/@openeryc/pi-tui": {
+			"version": "0.75.4",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-tui/-/pi-tui-0.75.4.tgz",
+			"license": "MIT",
+			"dependencies": {
+				"get-east-asian-width": "1.6.0",
+				"marked": "15.0.12"
+			},
+			"engines": {
+				"node": ">=22.19.0"
+			}
 		},
 		"node_modules/@protobufjs/aspromise": {
 			"version": "1.1.2",
