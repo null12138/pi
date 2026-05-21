@@ -3,6 +3,29 @@ import { networkInterfaces } from "node:os";
 import type { AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 
+const PASSWORD = process.env.PI_WEB_PASSWORD;
+
+function checkAuth(req: IncomingMessage, res: ServerResponse): boolean {
+	if (!PASSWORD) return true;
+
+	const auth = req.headers.authorization;
+	if (auth) {
+		const [scheme, credentials] = auth.split(" ");
+		if (scheme === "Basic" && credentials) {
+			const decoded = Buffer.from(credentials, "base64").toString("utf-8");
+			const [, password] = decoded.split(":");
+			if (password === PASSWORD) return true;
+		}
+	}
+
+	res.writeHead(401, {
+		"www-authenticate": 'Basic realm="pi", charset="UTF-8"',
+		"content-type": "text/plain",
+	});
+	res.end("Unauthorized");
+	return false;
+}
+
 function getLocalIP(): string {
 	const interfaces = networkInterfaces();
 	for (const iface of Object.values(interfaces)) {
@@ -108,6 +131,8 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 	const port = getPort();
 
 	const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+		if (!checkAuth(req, res)) return;
+
 		const url = req.url ?? "/";
 
 		if (req.method === "POST" && url === "/api/prompt") {
@@ -173,6 +198,11 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 		console.log(`  LAN:        http://${lan}:${addr.port}`);
 	}
 	console.log("  (listening on all interfaces)");
+	if (PASSWORD) {
+		console.log(`  auth:       Basic (user "pi", password from PI_WEB_PASSWORD)`);
+	} else {
+		console.log("  auth:       none (set PI_WEB_PASSWORD to enable)");
+	}
 	console.log();
 
 	// Keep process alive
