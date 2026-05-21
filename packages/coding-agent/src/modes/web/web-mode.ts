@@ -58,65 +58,86 @@ const HTML = `<!DOCTYPE html>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:14px;-webkit-text-size-adjust:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;background:#0b1014;color:#c9d1d9;display:flex;flex-direction:column;height:100dvh;overflow:hidden}
-#header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:#0d121a;border-bottom:1px solid #21262d;flex-shrink:0;gap:12px}
-#header h1{font-size:15px;font-weight:600;color:#e6edf3;letter-spacing:-.3px}
-#header-stats{display:flex;gap:16px;font-size:12px;color:#7d8590}
-#msgs{flex:1;overflow-y:auto;padding:20px;scroll-behavior:smooth;display:flex;flex-direction:column;gap:16px}
+#header{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#0d121a;border-bottom:1px solid #21262d;flex-shrink:0;gap:10px}
+#header-left{display:flex;align-items:center;gap:10px}
+#header h1{font-size:14px;font-weight:600;color:#e6edf3}
+#session-info{font-size:11px;color:#6e7681;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#header-stats{display:flex;gap:12px;font-size:11px;color:#7d8590}
+#msgs{flex:1;overflow-y:auto;padding:16px 20px;scroll-behavior:smooth;display:flex;flex-direction:column;gap:14px}
 #msgs::-webkit-scrollbar{width:6px}
 #msgs::-webkit-scrollbar-track{background:transparent}
 #msgs::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
-.msg-group{display:flex;flex-direction:column;gap:4px;animation:fadeIn .15s ease}
+.msg-group{display:flex;flex-direction:column;gap:2px;animation:fadeIn .15s ease;max-width:86%}
+.msg-group.user{max-width:82%;align-self:flex-end}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.msg-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.msg{max-width:82%;padding:10px 14px;border-radius:8px;font-size:13.5px;line-height:1.6;overflow-wrap:break-word}
-.msg.user{background:#1b4a8b;color:#e6edf3;align-self:flex-end;border-bottom-right-radius:4px}
-.msg.user .msg-label{color:#7ec9ff;text-align:right}
-.msg.assistant{background:#1a1f2b;color:#c9d1d9;align-self:flex-start;border-bottom-left-radius:4px;border:1px solid #21262d}
-.msg.assistant .msg-label{color:#7d8590}
+.msg-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:0 2px}
+.msg-group.user .msg-label{color:#7ec9ff;text-align:right}
+.msg-group.assistant .msg-label{color:#7d8590}
+.msg{border-radius:8px;font-size:13.5px;line-height:1.6;overflow-wrap:break-word;padding:10px 14px}
+.msg.user{background:#1b4a8b;color:#e6edf3;border-bottom-right-radius:2px}
+.msg.assistant{background:#1a1f2b;color:#c9d1d9;border-bottom-left-radius:2px;border:1px solid #21262d}
 .msg.system{background:transparent;color:#6e7681;font-size:12px;text-align:center;max-width:100%;padding:4px 0}
-.msg code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d}
-.msg pre{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;margin:8px 0;overflow-x:auto;font-size:12px;line-height:1.45}
+.msg p{margin:0 0 6px}
+.msg p:last-child{margin-bottom:0}
+.msg strong{color:#f2a65a;font-weight:600}
+.msg em{color:#c9d1d9;font-style:italic}
+.msg code{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;background:#2d333b;color:#c9d1d9;padding:1px 5px;border-radius:3px}
+.msg pre{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 12px;margin:8px 0;overflow-x:auto;font-size:12px;line-height:1.5}
+.msg pre code{background:transparent;padding:0;border-radius:0;font-size:inherit}
+.msg h1,.msg h2,.msg h3{margin:8px 0 4px;font-weight:600;color:#e6edf3}
+.msg h1{font-size:18px;border-bottom:1px solid #21262d;padding-bottom:4px}
+.msg h2{font-size:15px}
+.msg h3{font-size:13.5px;color:#c9d1d9}
+.msg ul,.msg ol{padding-left:20px;margin:4px 0 8px}
+.msg li{margin:2px 0}
+.msg hr{border:none;border-top:1px solid #21262d;margin:10px 0}
 .tool{border:1px solid #21262d;border-radius:8px;overflow:hidden;transition:border-color .2s}
 .tool:hover{border-color:#30363d}
-.tool-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0d121a;cursor:pointer;user-select:none;gap:8px;transition:background .15s}
+.tool-header{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#0d121a;cursor:pointer;user-select:none;gap:8px;transition:background .15s}
 .tool-header:hover{background:#161b22}
-.tool-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0;opacity:.6}
+.tool-icon{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .tool-icon.pending{background:#d29922;animation:pulse 1.5s infinite}
 .tool-icon.done{background:#3fb950}
 .tool-icon.error{background:#f85149}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-.tool-title{flex:1;font-size:12.5px;font-weight:500;color:#c9d1d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tool-arrow{color:#6e7681;font-size:10px;transition:transform .2s}
+.tool-title{flex:1;font-size:12px;font-weight:500;color:#c9d1d9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tool-arrow{color:#6e7681;font-size:9px;transition:transform .2s}
 .tool.expanded .tool-arrow{transform:rotate(90deg)}
-.tool-body{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;line-height:1.55;padding:10px 12px;background:#0b1014;white-space:pre-wrap;word-break:break-all;overflow-x:auto;max-height:30vh;overflow-y:auto;display:none}
-.tool-body::-webkit-scrollbar{width:4px}
+.tool-body{font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;line-height:1.55;padding:8px 10px;background:#0b1014;white-space:pre-wrap;word-break:break-all;overflow-x:auto;max-height:30vh;overflow-y:auto;display:none}
+.tool-body::-webkit-scrollbar{width:4px;height:4px}
 .tool-body::-webkit-scrollbar-thumb{background:#30363d;border-radius:2px}
 .tool.expanded .tool-body{display:block}
 .tool.mini .tool-body{max-height:12vh}
-.thinking{padding:6px 12px;margin:0 0 4px;border-left:2px solid #30363d;font-size:12px;color:#6e7681;font-style:italic}
-#input-area{background:#0d121a;border-top:1px solid #21262d;padding:14px 20px;flex-shrink:0}
-#input-area form{display:flex;gap:10px;max-width:900px;margin:0 auto}
-#prompt{flex:1;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px;color:#c9d1d9;font-size:13.5px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+.thinking{padding:5px 10px;border-left:2px solid #30363d;font-size:11.5px;color:#6e7681;font-style:italic}
+#input-area{background:#0d121a;border-top:1px solid #21262d;padding:12px 16px;flex-shrink:0}
+#input-area form{display:flex;gap:8px;max-width:900px;margin:0 auto}
+#prompt{flex:1;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:9px 12px;color:#c9d1d9;font-size:13.5px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
 #prompt:focus{border-color:#4493f8;box-shadow:0 0 0 3px rgba(68,147,248,.15)}
 #prompt::placeholder{color:#484f58}
-button{background:#1f6feb;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;flex-shrink:0}
+button{background:#1f6feb;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;flex-shrink:0}
 button:hover{background:#2b83ff}
 button:disabled{background:#21262d;color:#6e7681;cursor:not-allowed}
+.btn-mini{font-size:11px;padding:4px 10px;background:#21262d}
+.btn-mini:hover{background:#30363d}
 .spinner{display:none;width:16px;height:16px;border:2px solid #30363d;border-top-color:#4493f8;border-radius:50%;animation:spin .6s linear infinite}
 .spinner.active{display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:600px){
 html{font-size:13px}
-#msgs{padding:12px}
-.msg{max-width:92%}
-#input-area{padding:10px 14px}
-#prompt{padding:8px 12px}
-button{padding:8px 14px}
+#msgs{padding:10px;gap:10px}
+.msg-group{max-width:94%}
+.msg-group.user{max-width:92%}
+#input-area{padding:8px 10px}
+#prompt{padding:7px 10px}
+button{padding:7px 12px}
 }
 </style>
 </head>
 <body>
-<div id="header"><h1>pi</h1><div id="header-stats"><span id="stat-sessions"></span><span id="stat-cost"></span></div></div>
+<div id="header">
+<div id="header-left"><h1>pi</h1><span id="session-info"></span></div>
+<div id="header-stats"><span id="stat-sessions"></span><span id="stat-cost"></span></div>
+</div>
 <div id="msgs"></div>
 <div id="input-area">
 <form id="f" autocomplete="off">
@@ -128,20 +149,36 @@ button{padding:8px 14px}
 <script>
 const msgs=document.getElementById("msgs"),f=document.getElementById("f"),prompt=document.getElementById("prompt"),
 send=document.getElementById("send"),spinner=document.getElementById("spinner"),
-statSessions=document.getElementById("stat-sessions"),statCost=document.getElementById("stat-cost");
-let busy=false,toolEls={},curAssistant=null,curToolSeq=0;
+statSessions=document.getElementById("stat-sessions"),statCost=document.getElementById("stat-cost"),
+sessionInfo=document.getElementById("session-info");
+let busy=false,toolEls={},curAssistant=null;
 
 function scrollDown(){msgs.scrollTop=msgs.scrollHeight}
 function esc(s){if(!s)return"";return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
 function fmt(n){if(n<1e3)return n;if(n<1e4)return(n/1e3).toFixed(1)+"k";return Math.round(n/1e3)+"k"}
-function renderText(text){
-return esc(text).replace(/\\n\`\`\`(\\w*)\\n([\\s\\S]*?)\\n\`\`\`\\n/g,(_,lang,code)=>'</p><pre>'+esc(code)+'</pre><p>')
-.replace(/\\n\`\`\`(\\w*)\\n([\\s\\S]*?)\\n\`\`\`/g,(_,lang,code)=>'</p><pre>'+esc(code)+'</pre><p>')
-.replace(/\`([^\`]+)\`/g,'<code>$1</code>').replace(/\\n/g,'<br>')
+
+function md(text){
+let s=esc(text);
+const blocks=[];
+s=s.replace(/\`\`\`(\\w*)\\n([\\s\\S]*?)\\n\`\`\`/g,(_,lang,code)=>{blocks.push('<pre><code>'+code+'</code></pre>');return'\\x00B'+(blocks.length-1)+'\\x00B'});
+s=s.replace(/\`([^\`]+)\`/g,'<code>$1</code>');
+s=s.replace(/\\*\\*(.+?)\\*\\*/g,'<strong>$1</strong>');
+s=s.replace(/\\*(.+?)\\*/g,'<em>$1</em>');
+s=s.replace(/^### (.+$)/gm,'<h3>$1</h3>');
+s=s.replace(/^## (.+$)/gm,'<h2>$1</h2>');
+s=s.replace(/^# (.+$)/gm,'<h1>$1</h1>');
+s=s.replace(/^- (.+$)/gm,'<li>$1</li>');
+s=s.replace(/^> (.+$)/gm,'<blockquote>$1</blockquote>');
+s=s.replace(/((?:<li>.*<\\/li>\\n?)+)/g,'<ul>$1</ul>');
+s=s.replace(/^(---+|\\*\\*\\*+|___+)$/gm,'<hr>');
+s=s.replace(/\\x00B(\\d+)\\x00B/g,(_,i)=>blocks[parseInt(i)]);
+s=s.replace(/\\n\\n/g,'<br><br>');
+s=s.replace(/\\n/g,'<br>');
+return s
 }
 
 function addMsg(role,text){
-const g=document.createElement("div");g.className="msg-group";
+const g=document.createElement("div");g.className="msg-group "+role;
 if(role==="user"){g.innerHTML='<div class="msg-label">You</div><div class="msg user">'+esc(text)+'</div>'}
 else if(role==="assistant"){g.innerHTML='<div class="msg-label">pi</div><div class="msg assistant"></div>'}
 else{g.innerHTML='<div class="msg system">'+text+'</div>'}
@@ -151,7 +188,8 @@ function getAssistantDiv(){if(!curAssistant){curAssistant=addMsg("assistant","")
 
 function startTool(e){
 const el=document.createElement("div");el.className="tool";el.id="t"+e.toolCallId;
-el.innerHTML='<div class="tool-header"><span class="tool-icon pending"></span><span class="tool-title">'+esc(e.toolName)+(e.args?' '+esc(String(e.args.command||e.args.path||e.args.file_path||"")).slice(0,80):'')+'</span><span class="tool-arrow">&#9654;</span></div><div class="tool-body"></div>';
+const title=esc(e.toolName)+(e.args?' '+esc(String(e.args.command||e.args.path||e.args.file_path||"").slice(0,80)):'');
+el.innerHTML='<div class="tool-header"><span class="tool-icon pending"></span><span class="tool-title">'+title+'</span><span class="tool-arrow">&#9654;</span></div><div class="tool-body"></div>';
 el.querySelector(".tool-header").onclick=()=>el.classList.toggle("expanded");
 msgs.appendChild(el);toolEls[e.toolCallId]=el;scrollDown()}
 
@@ -160,19 +198,17 @@ const el=toolEls[id];if(!el)return;
 const icon=el.querySelector(".tool-icon"),body=el.querySelector(".tool-body");
 if(isError){icon.className="tool-icon error"}
 const texts=result&&result.content?result.content.filter(c=>c&&c.type==="text").map(c=>c.text):[];
-if(texts.length){body.textContent=texts.join("\\n");el.classList.add("expanded","mini")}
-}
+if(texts.length){body.textContent=texts.join("\\n");el.classList.add("expanded","mini")}}
 
 function finishTool(id,isError){
 const el=toolEls[id];if(!el)return;
 const icon=el.querySelector(".tool-icon");icon.className="tool-icon "+(isError?"error":"done");
-if(isError&&el.querySelector(".tool-body").textContent===""){el.querySelector(".tool-body").textContent="(no output)"}
-}
+const body=el.querySelector(".tool-body");if(isError&&!body.textContent.trim())body.textContent="(no output)"}
 
 function handle(d){
 switch(d.type){
 case"agent_start":curAssistant=null;break;
-case"text_delta":{const ad=getAssistantDiv();ad.innerHTML+=renderText(d.delta);scrollDown();break}
+case"text_delta":{const ad=getAssistantDiv();ad.innerHTML+=md(d.delta);scrollDown();break}
 case"thinking_delta":{let th=document.getElementById("think"+d.contentIndex);if(!th){th=document.createElement("div");th.className="thinking";th.id="think"+d.contentIndex;msgs.appendChild(th)}th.textContent+=d.delta;scrollDown();break}
 case"tool_execution_start":startTool(d);break;
 case"tool_execution_update":updateTool(d.toolCallId,d.result,false);break;
@@ -193,6 +229,10 @@ catch(err){addMsg("system","Error: "+esc(err.message))}finally{busy=false;send.d
 fetch("/api/stats").then(r=>r.json()).then(s=>{
 statSessions.textContent=s.sessions+" sessions";
 statCost.textContent="$"+s.cost.toFixed(2);
+}).catch(()=>{});
+
+fetch("/api/session-info").then(r=>r.json()).then(s=>{
+sessionInfo.textContent=s.id?("session: "+s.id.slice(0,8)+(s.name?" | "+s.name:"")):"";
 }).catch(()=>{});
 </script>
 </body>
@@ -252,6 +292,18 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 			return;
 		}
 
+		if (req.method === "GET" && url === "/api/session-info") {
+			res.writeHead(200, { "content-type": "application/json" });
+			res.end(
+				JSON.stringify({
+					id: session.sessionId,
+					name: session.sessionManager.getSessionName(),
+					file: session.sessionFile,
+				}),
+			);
+			return;
+		}
+
 		res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
 		res.end(HTML);
 	});
@@ -273,6 +325,7 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 	if (lan !== "127.0.0.1") {
 		console.log(`  LAN:        http://${lan}:${addr.port}`);
 	}
+	console.log(`  session:    ${session.sessionId.slice(0, 8)}`);
 	console.log("  (listening on all interfaces)");
 	if (PASSWORD) {
 		console.log(`  auth:       Basic (user "pi", password from PI_WEB_PASSWORD)`);
