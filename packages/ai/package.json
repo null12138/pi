@@ -1,6 +1,6 @@
 {
 	"name": "@openeryc/pi-ai",
-	"version": "0.75.22",
+	"version": "0.75.23",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"type": "module",
 	"main": "./dist/index.js",
