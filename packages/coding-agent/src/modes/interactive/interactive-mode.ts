@@ -2511,7 +2511,9 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/goal" || text.startsWith("/goal ")) {
+				const goal = text.replace(/^\/goal\s*/, "").trim();
 				this.handleGoalCommand(text);
+				if (goal) text = goal; // Submit goal text as the user message, not /goal prefix
 				// Don't return — let the normal submit flow run so the agent starts working
 			}
 			if (text === "/session") {
