@@ -226,6 +226,13 @@ while(true){const{done,value}=await reader.read();if(done)break;buf+=decoder.dec
 for(const line of lines){if(!line.trim())continue;try{handle(JSON.parse(line))}catch{}}}}
 catch(err){addMsg("system","Error: "+esc(err.message))}finally{busy=false;send.disabled=false;spinner.className="spinner"}};
 
+fetch("/api/messages").then(r=>r.json()).then(events=>{
+for(const e of events){
+if(e.type==="user"){addMsg("user",e.text)}
+else{handle(e)}
+}
+}).catch(()=>{});
+
 fetch("/api/stats").then(r=>r.json()).then(s=>{
 statSessions.textContent=s.sessions+" sessions";
 statCost.textContent="$"+s.cost.toFixed(2);
@@ -304,6 +311,54 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 			return;
 		}
 
+		if (req.method === "GET" && url === "/api/messages") {
+			const entries = session.sessionManager.getEntries();
+			const events: Record<string, unknown>[] = [];
+
+			for (const entry of entries) {
+				if (entry.type !== "message") continue;
+				const msg = (entry as { message: { role: string; content: unknown; usage?: unknown } }).message;
+				if (!msg) continue;
+
+				if (msg.role === "user") {
+					const content = typeof msg.content === "string" ? msg.content : "";
+					events.push({ type: "user", text: content });
+				} else if (msg.role === "assistant") {
+					const content = Array.isArray(msg.content) ? msg.content : [];
+					for (const block of content as Array<{ type: string; text?: string; toolCall?: unknown }>) {
+						if (block.type === "text" && block.text) {
+							events.push({ type: "text_delta", delta: block.text });
+						}
+						if (block.type === "toolCall" && block.toolCall) {
+							const tc = block.toolCall as { toolCallId?: string; toolName?: string; input?: unknown };
+							events.push({
+								type: "tool_execution_start",
+								toolCallId: tc.toolCallId,
+								toolName: tc.toolName,
+								args: tc.input,
+							});
+						}
+					}
+				} else if (msg.role === "toolResult") {
+					const content = (msg as { toolCallId?: string; content?: Array<{ type: string; text?: string }> })
+						.content;
+					events.push({
+						type: "tool_execution_end",
+						toolCallId: (msg as { toolCallId?: string }).toolCallId,
+						result: { content: content ?? [] },
+						isError: false,
+					});
+				}
+			}
+
+			const usage = getSessionTokenCount(session);
+			events.push({ type: "agent_end", usage });
+
+			res.writeHead(200, { "content-type": "application/json" });
+			res.end(JSON.stringify(events));
+			return;
+		}
+
 		res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
 		res.end(HTML);
 	});
@@ -338,6 +393,27 @@ export async function runWebMode(runtime: AgentSessionRuntime): Promise<void> {
 	await new Promise(() => {});
 
 	server.close();
+}
+
+function getSessionTokenCount(session: AgentSessionRuntime["session"]): Record<string, unknown> | undefined {
+	const entries = session.sessionManager.getEntries();
+	let input = 0;
+	let output = 0;
+	let costTotal = 0;
+	let hasUsage = false;
+	for (const entry of entries) {
+		if (entry.type !== "message") continue;
+		const msg = (
+			entry as { message: { role: string; usage?: { input: number; output: number; cost: { total: number } } } }
+		).message;
+		if (msg?.role === "assistant" && msg.usage) {
+			input += msg.usage.input;
+			output += msg.usage.output;
+			costTotal += msg.usage.cost.total;
+			hasUsage = true;
+		}
+	}
+	return hasUsage ? { input, output, cost: { total: costTotal } } : undefined;
 }
 
 function toSerializableEvents(event: AgentSessionEvent): Record<string, unknown>[] {
