@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.26] - 2026-05-25
 
 ### Added
 - MCP (Model Context Protocol) client support via `mcpServers` setting in `settings.json`. Configure MCP servers with `command`/`args`/`env`, and their tools are exposed as `mcp.<server>.<tool>` namespaced tools to the agent. stdio transport only.
