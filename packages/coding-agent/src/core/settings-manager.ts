@@ -113,7 +113,17 @@ export interface Settings {
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
 	sessionRetentionDays?: number; // Auto-delete sessions older than N days (0 or unset = keep forever)
 	httpIdleTimeoutMs?: number; // HTTP header/body idle timeout in milliseconds; 0 disables it
-	mcpServers?: Record<string, { command: string; args?: string[]; env?: Record<string, string> }>;
+	mcpServers?: Record<
+		string,
+		{
+			command?: string;
+			args?: string[];
+			env?: Record<string, string>;
+			url?: string;
+			transport?: "stdio" | "sse" | "http";
+			headers?: Record<string, string>;
+		}
+	>;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -1090,7 +1100,19 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getMcpServers(): Record<string, { command: string; args?: string[]; env?: Record<string, string> }> | undefined {
+	getMcpServers():
+		| Record<
+				string,
+				{
+					command?: string;
+					args?: string[];
+					env?: Record<string, string>;
+					url?: string;
+					transport?: "stdio" | "sse" | "http";
+					headers?: Record<string, string>;
+				}
+		  >
+		| undefined {
 		return this.settings.mcpServers ? { ...this.settings.mcpServers } : undefined;
 	}
 }

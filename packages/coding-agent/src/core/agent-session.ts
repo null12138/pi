@@ -70,6 +70,7 @@ import {
 	wrapRegisteredTools,
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
+import { HookRunner } from "./hook-runner.ts";
 import { MCPManager } from "./mcp/index.ts";
 import type { BashExecutionMessage, CustomMessage } from "./messages.ts";
 import type { ModelRegistry } from "./model-registry.ts";
@@ -310,6 +311,9 @@ export class AgentSession {
 	// MCP client management
 	private _mcpManager: MCPManager | null = null;
 
+	// Hooks system
+	private _hookRunner: HookRunner | null = null;
+
 	// Model registry for API key resolution
 	private _modelRegistry: ModelRegistry;
 
@@ -341,6 +345,7 @@ export class AgentSession {
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
+		this._hookRunner = new HookRunner(this.settingsManager);
 		this._installAgentToolHooks();
 
 		this._buildRuntime({
@@ -401,7 +406,15 @@ export class AgentSession {
 	 * happens here instead of in wrappers.
 	 */
 	private _installAgentToolHooks(): void {
+		const hookRunner = this._hookRunner;
 		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+			if (hookRunner) {
+				const hookResult = await hookRunner.runPreToolHooks(toolCall.name, args);
+				if (hookResult?.behavior === "deny") {
+					throw new Error(hookResult.message ?? `Blocked by hook: ${toolCall.name}`);
+				}
+			}
+
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
 				return undefined;
@@ -423,6 +436,19 @@ export class AgentSession {
 		};
 
 		this.agent.afterToolCall = async ({ toolCall, args, result, isError }) => {
+			if (this._hookRunner) {
+				const postHookResult = await this._hookRunner.runPostToolHooks(
+					toolCall.name,
+					result.content.map((c: { type: string; text?: string }) => c.text ?? "").join("\n"),
+				);
+				if (postHookResult?.additionalContext) {
+					result = {
+						...result,
+						content: [...result.content, { type: "text", text: postHookResult.additionalContext }],
+					};
+				}
+			}
+
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_result")) {
 				return undefined;
@@ -2097,8 +2123,8 @@ export class AgentSession {
 			this._mcpManager = null;
 		}
 
-		this._mcpManager = new MCPManager(mcpServers);
-		await this._mcpManager.start();
+		this._mcpManager = new MCPManager();
+		await this._mcpManager.start(mcpServers);
 
 		const mcpTools = this._mcpManager.getToolDefinitions();
 		if (mcpTools.length > 0) {

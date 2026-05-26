@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- MCP: SSE and Streamable HTTP transport support (`url` + `transport` config)
+- MCP: Resource listing and reading support
+- AskUserQuestion tool: model can ask clarifying questions during execution
+- Hooks system: pre/post tool hooks via `settings.json` (`hooks.PreToolUse`/`hooks.PostToolUse`)
+
+### Changed
+- MCP server config now supports `url`, `transport`, and `headers` fields
+
 ## [0.75.27] - 2026-05-26
 
 ### Added

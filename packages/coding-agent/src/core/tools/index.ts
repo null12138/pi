@@ -1,4 +1,9 @@
 export {
+	type AskUserQuestionInput,
+	createAskUserQuestionTool,
+	createAskUserQuestionToolDefinition,
+} from "./ask-user-question.ts";
+export {
 	type BashOperations,
 	type BashSpawnContext,
 	type BashSpawnHook,
@@ -80,6 +85,7 @@ export {
 
 import type { AgentTool } from "@openeryc/pi-agent-core";
 import type { ToolDefinition } from "../extensions/types.ts";
+import { createAskUserQuestionTool, createAskUserQuestionToolDefinition } from "./ask-user-question.ts";
 import { type BashToolOptions, createBashTool, createBashToolDefinition } from "./bash.ts";
 import { createEditTool, createEditToolDefinition, type EditToolOptions } from "./edit.ts";
 import { createFindTool, createFindToolDefinition, type FindToolOptions } from "./find.ts";
@@ -92,7 +98,17 @@ import { createWriteTool, createWriteToolDefinition, type WriteToolOptions } fro
 
 export type Tool = AgentTool<any>;
 export type ToolDef = ToolDefinition<any, any>;
-export type ToolName = "read" | "bash" | "edit" | "write" | "grep" | "find" | "ls" | "webfetch" | "websearch";
+export type ToolName =
+	| "read"
+	| "bash"
+	| "edit"
+	| "write"
+	| "grep"
+	| "find"
+	| "ls"
+	| "webfetch"
+	| "websearch"
+	| "askuserquestion";
 export const allToolNames: Set<ToolName> = new Set([
 	"read",
 	"bash",
@@ -103,6 +119,7 @@ export const allToolNames: Set<ToolName> = new Set([
 	"ls",
 	"webfetch",
 	"websearch",
+	"askuserquestion",
 ]);
 
 export interface ToolsOptions {
@@ -135,6 +152,8 @@ export function createToolDefinition(toolName: ToolName, cwd: string, options?: 
 			return createWebFetchToolDefinition();
 		case "websearch":
 			return createWebSearchToolDefinition();
+		case "askuserquestion":
+			return createAskUserQuestionToolDefinition();
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
@@ -160,6 +179,8 @@ export function createTool(toolName: ToolName, cwd: string, options?: ToolsOptio
 			return createWebFetchTool();
 		case "websearch":
 			return createWebSearchTool();
+		case "askuserquestion":
+			return createAskUserQuestionTool();
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
@@ -194,6 +215,7 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 		ls: createLsToolDefinition(cwd, options?.ls),
 		webfetch: createWebFetchToolDefinition(),
 		websearch: createWebSearchToolDefinition(),
+		askuserquestion: createAskUserQuestionToolDefinition(),
 	};
 }
 
@@ -226,5 +248,6 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		ls: createLsTool(cwd, options?.ls),
 		webfetch: createWebFetchTool(),
 		websearch: createWebSearchTool(),
+		askuserquestion: createAskUserQuestionTool(),
 	};
 }
