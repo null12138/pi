@@ -1,170 +1,116 @@
 import { type ChildProcess, spawn } from "child_process";
-import { createInterface, type Interface } from "readline";
-import type {
-	MCPCallToolResult,
-	MCPInitializeResult,
-	MCPJsonRpcRequest,
-	MCPJsonRpcResponse,
-	MCPListToolsResult,
-	MCPServerConfig,
-} from "./types.ts";
+import { createInterface } from "readline";
 
-const INITIALIZE_REQUEST = "initialize";
-const TOOLS_LIST_REQUEST = "tools/list";
-const TOOLS_CALL_REQUEST = "tools/call";
+export interface MCPServerConfig {
+	command: string;
+	args?: string[];
+	env?: Record<string, string>;
+}
+
+interface MCPSimpleTool {
+	name: string;
+	description?: string;
+	inputSchema: { type: string; properties?: Record<string, unknown>; required?: string[] };
+}
+
+interface MCPListToolsResult {
+	tools: MCPSimpleTool[];
+}
+
+interface MCPCallToolResult {
+	content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+	isError?: boolean;
+}
 
 export class MCPClient {
 	private process: ChildProcess | null = null;
 	private requestId = 0;
-	private pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
-	private lineReader: Interface | null = null;
-	private config: MCPServerConfig;
-	private errorLogs: string[] = [];
+	private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
 
-	get errors(): readonly string[] {
-		return this.errorLogs;
-	}
-
-	constructor(config: MCPServerConfig) {
-		this.config = config;
-	}
-
-	async connect(): Promise<void> {
-		const { command, args = [], env } = this.config;
+	async connect(config: MCPServerConfig): Promise<void> {
+		const { command, args = [], env } = config;
 		const childEnv = env ? { ...process.env, ...env } : process.env;
 
 		return new Promise((resolve, reject) => {
-			this.process = spawn(command, args, {
-				env: childEnv,
-				stdio: ["pipe", "pipe", "pipe"],
-				shell: false,
-			});
+			const proc = spawn(command, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], shell: false });
+			this.process = proc;
 
 			const onError = (error: Error) => {
 				reject(new Error(`Failed to spawn MCP server "${command}": ${error.message}`));
 			};
+			proc.on("error", onError);
+			proc.once("spawn", () => proc.removeListener("error", onError));
 
-			this.process.on("error", onError);
-			this.process.once("spawn", () => {
-				this.process!.removeListener("error", onError);
-			});
-
-			if (!this.process.stdout) {
+			if (!proc.stdout) {
 				reject(new Error(`MCP server "${command}" has no stdout`));
 				return;
 			}
 
-			this.lineReader = createInterface({ input: this.process.stdout, crlfDelay: Infinity });
-
-			this.lineReader.on("line", (line: string) => {
-				this.handleLine(line);
-			});
-
-			if (this.process.stderr) {
-				this.process.stderr.setEncoding("utf-8");
-				this.process.stderr.on("data", (data: string) => {
-					this.errorLogs.push(data);
-				});
-			}
-
-			this.process.on("exit", (code) => {
-				const pendingCopy = new Map(this.pendingRequests);
-				this.pendingRequests.clear();
-				for (const [, handler] of pendingCopy) {
-					handler.reject(new Error(`MCP server "${command}" exited with code ${code}`));
+			const rl = createInterface({ input: proc.stdout, crlfDelay: Infinity });
+			rl.on("line", (line: string) => {
+				try {
+					const res = JSON.parse(line);
+					if (res.id !== undefined) {
+						const handler = this.pending.get(res.id);
+						if (!handler) return;
+						this.pending.delete(res.id);
+						if (res.error) {
+							handler.reject(new Error(`MCP error: ${res.error.message} (code ${res.error.code})`));
+						} else {
+							handler.resolve(res.result);
+						}
+					}
+				} catch {
+					// Non-JSON lines (stderr)
 				}
 			});
 
-			this.initialize()
+			proc.on("exit", (code) => {
+				for (const [, h] of this.pending) {
+					h.reject(new Error(`MCP server "${command}" exited with code ${code}`));
+				}
+				this.pending.clear();
+			});
+
+			this.send("initialize", {
+				protocolVersion: "2024-11-05",
+				capabilities: {},
+				clientInfo: { name: "pi", version: "1.0.0" },
+			})
 				.then(() => resolve())
 				.catch(reject);
 		});
 	}
 
-	private async sendRequest(method: string, params?: Record<string, unknown>): Promise<unknown> {
-		if (!this.process || !this.process.stdin) {
-			throw new Error(`MCP client not connected`);
-		}
+	private send(method: string, params?: Record<string, unknown>): Promise<unknown> {
+		if (!this.process?.stdin) throw new Error("MCP client not connected");
 
 		const id = ++this.requestId;
-		const request: MCPJsonRpcRequest = {
-			jsonrpc: "2.0",
-			id,
-			method,
-			params,
-		};
-
 		return new Promise((resolve, reject) => {
-			this.pendingRequests.set(id, { resolve, reject });
-			const payload = JSON.stringify(request);
-			this.process!.stdin!.write(`${payload}\n`);
+			this.pending.set(id, { resolve, reject });
+			this.process!.stdin!.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
 		});
 	}
 
-	private handleLine(line: string): void {
-		try {
-			const response = JSON.parse(line) as MCPJsonRpcResponse;
-			if (response.id !== undefined) {
-				const request = this.pendingRequests.get(response.id);
-				if (request) {
-					this.pendingRequests.delete(response.id);
-					if (response.error) {
-						request.reject(new Error(`MCP error: ${response.error.message} (code ${response.error.code})`));
-					} else {
-						request.resolve(response.result);
-					}
-				}
-			}
-		} catch {
-			// Ignore non-JSON lines (stderr or informational messages)
-		}
-	}
-
-	private async initialize(): Promise<MCPInitializeResult> {
-		return (await this.sendRequest(INITIALIZE_REQUEST, {
-			protocolVersion: "2024-11-05",
-			capabilities: {},
-			clientInfo: { name: "pi", version: "1.0.0" },
-		})) as MCPInitializeResult;
-	}
-
 	async listTools(): Promise<MCPListToolsResult> {
-		return (await this.sendRequest(TOOLS_LIST_REQUEST)) as MCPListToolsResult;
+		return (await this.send("tools/list")) as MCPListToolsResult;
 	}
 
 	async callTool(name: string, args: Record<string, unknown>): Promise<MCPCallToolResult> {
-		return (await this.sendRequest(TOOLS_CALL_REQUEST, {
-			name,
-			arguments: args,
-		} as unknown as Record<string, unknown>)) as MCPCallToolResult;
+		return (await this.send("tools/call", { name, arguments: args })) as MCPCallToolResult;
 	}
 
 	async disconnect(): Promise<void> {
-		if (this.lineReader) {
-			this.lineReader.close();
-			this.lineReader = null;
-		}
-		if (this.process) {
-			const proc = this.process;
-			this.process = null;
-			this.pendingRequests.clear();
-			if (!proc.killed) {
-				proc.kill();
-				await new Promise<void>((resolve) => {
-					const onExit = () => {
-						resolve();
-					};
-					proc.on("exit", onExit);
-					if (proc.exitCode !== null) {
-						proc.removeListener("exit", onExit);
-						resolve();
-					}
-					setTimeout(() => {
-						proc.removeListener("exit", onExit);
-						resolve();
-					}, 3000);
-				});
-			}
+		const proc = this.process;
+		this.process = null;
+		this.pending.clear();
+		if (proc && !proc.killed) {
+			proc.kill();
+			await new Promise<void>((resolve) => {
+				if (proc.exitCode !== null) return resolve();
+				proc.on("exit", resolve);
+				setTimeout(resolve, 3000);
+			});
 		}
 	}
 }

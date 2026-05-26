@@ -8,13 +8,11 @@
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@openeryc/pi-ai";
-import { ProcessTerminal, setKeybindings, TUI } from "@openeryc/pi-tui";
 import chalk from "chalk";
 import { type Args, parseArgs, printHelp } from "./cli/args.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
 import { listModels } from "./cli/list-models.ts";
-import { selectSession } from "./cli/session-picker.ts";
 import { ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, VERSION } from "./config.ts";
 import { type CreateAgentSessionRuntimeFactory, createAgentSessionRuntime } from "./core/agent-session-runtime.ts";
 import {
@@ -27,24 +25,16 @@ import { AuthStorage } from "./core/auth-storage.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import type { ExtensionFactory } from "./core/extensions/types.ts";
 import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
-import { KeybindingsManager } from "./core/keybindings.ts";
 import type { ModelRegistry } from "./core/model-registry.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
-import {
-	formatMissingSessionCwdPrompt,
-	getMissingSessionCwdIssue,
-	MissingSessionCwdError,
-	type SessionCwdIssue,
-} from "./core/session-cwd.ts";
+import { getMissingSessionCwdIssue, MissingSessionCwdError } from "./core/session-cwd.ts";
 import { SessionManager } from "./core/session-manager.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
-import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
-import { InteractiveMode, runPrintMode, runRpcMode, runWebMode } from "./modes/index.ts";
-import { ExtensionSelectorComponent } from "./modes/interactive/components/extension-selector.ts";
-import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
+import { runMigrations } from "./migrations.ts";
+import { runPrintMode, runRpcMode, runWebMode } from "./modes/index.ts";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
 import { isLocalPath } from "./utils/paths.ts";
 import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.ts";
@@ -95,7 +85,7 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
-type AppMode = "interactive" | "print" | "json" | "rpc" | "web";
+type AppMode = "print" | "json" | "rpc" | "web";
 
 function resolveAppMode(parsed: Args, stdinIsTTY: boolean): AppMode {
 	if (parsed.mode === "rpc") {
@@ -110,7 +100,7 @@ function resolveAppMode(parsed: Args, stdinIsTTY: boolean): AppMode {
 	if (parsed.print || !stdinIsTTY) {
 		return "print";
 	}
-	return "interactive";
+	return "print";
 }
 
 function toPrintOutputMode(appMode: AppMode): "text" | "json" {
@@ -220,7 +210,7 @@ async function createSessionManager(
 	parsed: Args,
 	cwd: string,
 	sessionDir: string | undefined,
-	settingsManager: SettingsManager,
+	_settingsManager: SettingsManager,
 ): Promise<SessionManager> {
 	if (parsed.noSession) {
 		return SessionManager.inMemory();
@@ -262,23 +252,6 @@ async function createSessionManager(
 			case "not_found":
 				console.error(chalk.red(`No session found matching '${resolved.arg}'`));
 				process.exit(1);
-		}
-	}
-
-	if (parsed.resume) {
-		initTheme(settingsManager.getTheme(), true);
-		try {
-			const selectedPath = await selectSession(
-				(onProgress) => SessionManager.list(cwd, sessionDir, onProgress),
-				SessionManager.listAll,
-			);
-			if (!selectedPath) {
-				console.log(chalk.dim("No session selected"));
-				process.exit(0);
-			}
-			return SessionManager.open(selectedPath, sessionDir);
-		} finally {
-			stopThemeWatcher();
 		}
 	}
 
@@ -392,40 +365,6 @@ function resolveCliPaths(cwd: string, paths: string[] | undefined): string[] | u
 	return paths?.map((value) => (isLocalPath(value) ? resolve(cwd, value) : value));
 }
 
-async function promptForMissingSessionCwd(
-	issue: SessionCwdIssue,
-	settingsManager: SettingsManager,
-): Promise<string | undefined> {
-	initTheme(settingsManager.getTheme());
-	setKeybindings(KeybindingsManager.create());
-
-	return new Promise((resolve) => {
-		const ui = new TUI(new ProcessTerminal(), settingsManager.getShowHardwareCursor());
-		ui.setClearOnShrink(settingsManager.getClearOnShrink());
-
-		let settled = false;
-		const finish = (result: string | undefined) => {
-			if (settled) {
-				return;
-			}
-			settled = true;
-			ui.stop();
-			resolve(result);
-		};
-
-		const selector = new ExtensionSelectorComponent(
-			formatMissingSessionCwdPrompt(issue),
-			["Continue", "Cancel"],
-			(option) => finish(option === "Continue" ? issue.fallbackCwd : undefined),
-			() => finish(undefined),
-			{ tui: ui },
-		);
-		ui.addChild(selector);
-		ui.setFocus(selector);
-		ui.start();
-	});
-}
-
 export interface MainOptions {
 	extensionFactories?: ExtensionFactory[];
 }
@@ -461,11 +400,8 @@ export async function main(args: string[], options?: MainOptions) {
 		}
 	}
 	time("parseArgs");
-	let appMode = resolveAppMode(parsed, process.stdin.isTTY);
-	const shouldTakeOverStdout = appMode !== "interactive";
-	if (shouldTakeOverStdout) {
-		takeOverStdout();
-	}
+	const appMode = resolveAppMode(parsed, process.stdin.isTTY);
+	takeOverStdout();
 
 	if (parsed.version) {
 		console.log(VERSION);
@@ -494,7 +430,7 @@ export async function main(args: string[], options?: MainOptions) {
 	validateForkFlags(parsed);
 
 	// Run migrations (pass cwd for project-local migrations)
-	const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(process.cwd());
+	runMigrations(process.cwd());
 	time("runMigrations");
 
 	const cwd = process.cwd();
@@ -512,19 +448,11 @@ export async function main(args: string[], options?: MainOptions) {
 		parsed.sessionDir ??
 		(envSessionDir ? expandTildePath(envSessionDir) : undefined) ??
 		startupSettingsManager.getSessionDir();
-	let sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
+	const sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
 	const missingSessionCwdIssue = getMissingSessionCwdIssue(sessionManager, cwd);
 	if (missingSessionCwdIssue) {
-		if (appMode === "interactive") {
-			const selectedCwd = await promptForMissingSessionCwd(missingSessionCwdIssue, startupSettingsManager);
-			if (!selectedCwd) {
-				process.exit(0);
-			}
-			sessionManager = SessionManager.open(missingSessionCwdIssue.sessionFile!, sessionDir, selectedCwd);
-		} else {
-			console.error(chalk.red(new MissingSessionCwdError(missingSessionCwdIssue).message));
-			process.exit(1);
-		}
+		console.error(chalk.red(new MissingSessionCwdError(missingSessionCwdIssue).message));
+		process.exit(1);
 	}
 	time("createSessionManager");
 
@@ -624,7 +552,7 @@ export async function main(args: string[], options?: MainOptions) {
 		agentDir,
 		sessionManager,
 	});
-	const { services, session, modelFallbackMessage } = runtime;
+	const { services, session } = runtime;
 	const { settingsManager, modelRegistry, resourceLoader } = services;
 	configureHttpDispatcher(settingsManager.getHttpIdleTimeoutMs());
 
@@ -655,9 +583,6 @@ export async function main(args: string[], options?: MainOptions) {
 	let stdinContent: string | undefined;
 	if (appMode !== "rpc" && appMode !== "web") {
 		stdinContent = await readPipedStdin();
-		if (stdinContent !== undefined && appMode === "interactive") {
-			appMode = "print";
-		}
 	}
 	time("readPipedStdin");
 
@@ -667,13 +592,8 @@ export async function main(args: string[], options?: MainOptions) {
 		stdinContent,
 	);
 	time("prepareInitialMessage");
-	initTheme(settingsManager.getTheme(), appMode === "interactive");
-	time("initTheme");
 
-	// Show deprecation warnings in interactive mode
-	if (appMode === "interactive" && deprecationWarnings.length > 0) {
-		await showDeprecationWarnings(deprecationWarnings);
-	}
+	// Read piped stdin content (if any) - skip for RPC mode which uses stdin for JSON-RPC
 
 	time("resolveModelScope");
 	reportDiagnostics(runtime.diagnostics);
@@ -682,14 +602,8 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 	time("createAgentSession");
 
-	if (appMode !== "interactive" && appMode !== "web" && !session.model) {
+	if (appMode !== "web" && !session.model) {
 		console.error(chalk.red(formatNoModelsAvailableMessage()));
-		process.exit(1);
-	}
-
-	const startupBenchmark = isTruthyEnvFlag(process.env.PI_STARTUP_BENCHMARK);
-	if (startupBenchmark && appMode !== "interactive" && appMode !== "web") {
-		console.error(chalk.red("Error: PI_STARTUP_BENCHMARK only supports interactive mode"));
 		process.exit(1);
 	}
 
@@ -701,32 +615,6 @@ export async function main(args: string[], options?: MainOptions) {
 		console.log("Starting web UI...");
 		if (parsed.webPassword) process.env.PI_WEB_PASSWORD = parsed.webPassword;
 		await runWebMode(runtime);
-	} else if (appMode === "interactive") {
-		const interactiveMode = new InteractiveMode(runtime, {
-			migratedProviders,
-			modelFallbackMessage,
-			initialMessage,
-			initialImages,
-			initialMessages: parsed.messages,
-			verbose: parsed.verbose,
-		});
-		if (startupBenchmark) {
-			await interactiveMode.init();
-			time("interactiveMode.init");
-			printTimings();
-			interactiveMode.stop();
-			stopThemeWatcher();
-			if (process.stdout.writableLength > 0) {
-				await new Promise<void>((resolve) => process.stdout.once("drain", resolve));
-			}
-			if (process.stderr.writableLength > 0) {
-				await new Promise<void>((resolve) => process.stderr.once("drain", resolve));
-			}
-			return;
-		}
-
-		printTimings();
-		await interactiveMode.run();
 	} else {
 		printTimings();
 		const exitCode = await runPrintMode(runtime, {
@@ -735,7 +623,6 @@ export async function main(args: string[], options?: MainOptions) {
 			initialMessage,
 			initialImages,
 		});
-		stopThemeWatcher();
 		restoreStdout();
 		if (exitCode !== 0) {
 			process.exitCode = exitCode;

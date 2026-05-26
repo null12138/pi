@@ -1,4 +1,3 @@
-import { Markdown, type MarkdownTheme } from "@openeryc/pi-tui";
 import chalk from "chalk";
 import { selectConfig } from "./cli/config-selector.ts";
 import {
@@ -14,6 +13,7 @@ import {
 } from "./config.ts";
 import { DefaultPackageManager } from "./core/package-manager.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
+import { Markdown, type MarkdownTheme } from "./core/tui-stubs.ts";
 import { spawnProcess } from "./utils/child-process.ts";
 import { getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.ts";
 import {

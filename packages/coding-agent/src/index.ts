@@ -283,8 +283,6 @@ export {
 export { type MainOptions, main } from "./main.ts";
 // Run modes for programmatic SDK usage
 export {
-	InteractiveMode,
-	type InteractiveModeOptions,
 	type ModelInfo,
 	type PrintModeOptions,
 	RpcClient,
@@ -296,55 +294,16 @@ export {
 	runPrintMode,
 	runRpcMode,
 } from "./modes/index.ts";
-// UI components for extensions
-export {
-	ArminComponent,
-	AssistantMessageComponent,
-	BashExecutionComponent,
-	BorderedLoader,
-	BranchSummaryMessageComponent,
-	CompactionSummaryMessageComponent,
-	CustomEditor,
-	CustomMessageComponent,
-	DynamicBorder,
-	ExtensionEditorComponent,
-	ExtensionInputComponent,
-	ExtensionSelectorComponent,
-	FooterComponent,
-	keyHint,
-	keyText,
-	LoginDialogComponent,
-	ModelSelectorComponent,
-	OAuthSelectorComponent,
-	type RenderDiffOptions,
-	rawKeyHint,
-	renderDiff,
-	SessionSelectorComponent,
-	type SettingsCallbacks,
-	type SettingsConfig,
-	SettingsSelectorComponent,
-	ShowImagesSelectorComponent,
-	SkillInvocationMessageComponent,
-	ThemeSelectorComponent,
-	ThinkingSelectorComponent,
-	ToolExecutionComponent,
-	type ToolExecutionOptions,
-	TreeSelectorComponent,
-	truncateToVisualLines,
-	UserMessageComponent,
-	UserMessageSelectorComponent,
-	type VisualTruncateResult,
-} from "./modes/interactive/components/index.ts";
-// Theme utilities for custom tools and extensions
+export { type RenderDiffOptions, renderDiff } from "./modes/interactive/components/diff.ts";
+// UI utility stubs (keep for compile-time compatibility, no runtime dependency)
+export { keyHint, keyText } from "./modes/interactive/components/keybinding-hints.ts";
+export { truncateToVisualLines, type VisualTruncateResult } from "./modes/interactive/components/visual-truncate.ts";
+// Theme utilities
 export {
 	getLanguageFromPath,
-	getMarkdownTheme,
-	getSelectListTheme,
-	getSettingsListTheme,
 	highlightCode,
 	initTheme,
 	Theme,
-	type ThemeColor,
 } from "./modes/interactive/theme/theme.ts";
 // Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";

@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import type { AgentTool } from "@openeryc/pi-agent-core";
-import { Container, Text, truncateToWidth } from "@openeryc/pi-tui";
 import { spawn } from "child_process";
 import { type Static, Type } from "typebox";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
@@ -15,6 +14,7 @@ import {
 	untrackDetachedChildPid,
 } from "../../utils/shell.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../extensions/types.ts";
+import { Container, Text, truncateToWidth } from "../tui-stubs.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
 import { getTextOutput, invalidArgText, str } from "./render-utils.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";

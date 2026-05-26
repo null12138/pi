@@ -1,10 +1,10 @@
 import type { AgentTool } from "@openeryc/pi-agent-core";
-import { Box, Container, Spacer, Text } from "@openeryc/pi-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { renderDiff } from "../../modes/interactive/components/diff.ts";
 import type { ToolDefinition } from "../extensions/types.ts";
+import { Box, Container, Spacer, Text } from "../tui-stubs.ts";
 import {
 	applyEditsToNormalizedContent,
 	computeEditsDiff,

@@ -1,8 +1,8 @@
 import * as os from "node:os";
 import type { ImageContent, TextContent } from "@openeryc/pi-ai";
-import { getCapabilities, getImageDimensions, imageFallback } from "@openeryc/pi-tui";
 import { stripAnsi } from "../../utils/ansi.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
+import { getCapabilities, getImageDimensions, imageFallback } from "../tui-stubs.ts";
 
 export function shortenPath(path: unknown): string {
 	if (typeof path !== "string") return "";

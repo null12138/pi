@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { getAgentDir } from "../config.ts";
 import {
 	type Keybinding,
 	type KeybindingDefinitions,
@@ -5,10 +8,7 @@ import {
 	type KeyId,
 	TUI_KEYBINDINGS,
 	KeybindingsManager as TuiKeybindingsManager,
-} from "@openeryc/pi-tui";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { getAgentDir } from "../config.ts";
+} from "./tui-stubs.ts";
 
 export interface AppKeybindings {
 	"app.interrupt": true;
@@ -55,10 +55,6 @@ export interface AppKeybindings {
 }
 
 export type AppKeybinding = keyof AppKeybindings;
-
-declare module "@openeryc/pi-tui" {
-	interface Keybindings extends AppKeybindings {}
-}
 
 export const KEYBINDINGS = {
 	...TUI_KEYBINDINGS,

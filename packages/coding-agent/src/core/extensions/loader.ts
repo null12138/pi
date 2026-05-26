@@ -11,8 +11,6 @@ import { fileURLToPath } from "node:url";
 import * as _bundledPiAgentCore from "@openeryc/pi-agent-core";
 import * as _bundledPiAi from "@openeryc/pi-ai";
 import * as _bundledPiAiOauth from "@openeryc/pi-ai/oauth";
-import type { KeyId } from "@openeryc/pi-tui";
-import * as _bundledPiTui from "@openeryc/pi-tui";
 import { createJiti } from "jiti/static";
 // Static imports of packages that extensions may use.
 // These MUST be static so Bun bundles them into the compiled binary.
@@ -28,6 +26,8 @@ import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
 import { createSyntheticSourceInfo } from "../source-info.ts";
+import type { KeyId } from "../tui-stubs.ts";
+import * as _bundledPiTui from "../tui-stubs.ts";
 import type {
 	Extension,
 	ExtensionAPI,

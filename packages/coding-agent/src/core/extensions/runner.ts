@@ -4,13 +4,13 @@
 
 import type { AgentMessage } from "@openeryc/pi-agent-core";
 import type { ImageContent, Model } from "@openeryc/pi-ai";
-import type { KeyId } from "@openeryc/pi-tui";
 import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { SessionManager } from "../session-manager.ts";
 import type { BuildSystemPromptOptions } from "../system-prompt.ts";
+import type { KeyId } from "../tui-stubs.ts";
 import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
@@ -88,7 +88,7 @@ const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltI
 		const keyList = Array.isArray(keys) ? keys : [keys];
 		const restrictOverride = (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]).includes(keybinding);
 		for (const key of keyList) {
-			const normalizedKey = key.toLowerCase() as KeyId;
+			const normalizedKey = (typeof key === "string" ? key.toLowerCase() : String(key)) as KeyId;
 			// If multiple actions bind the same key, the reserved action wins so extensions
 			// remain blocked by reserved shortcuts regardless of iteration order.
 			const existing = builtinKeybindings[normalizedKey];

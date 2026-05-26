@@ -3,10 +3,10 @@
  */
 
 import type { Api, Model } from "@openeryc/pi-ai";
-import { fuzzyFilter } from "@openeryc/pi-tui";
 import chalk from "chalk";
 import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
 import type { ModelRegistry } from "../core/model-registry.ts";
+import { fuzzyFilter } from "../core/tui-stubs.ts";
 
 /**
  * Format a number as human-readable (e.g., 200000 -> "200K", 1000000 -> "1M")

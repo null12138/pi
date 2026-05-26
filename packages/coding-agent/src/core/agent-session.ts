@@ -720,15 +720,11 @@ export class AgentSession {
 		);
 		this._disconnectFromAgent();
 		this._eventListeners = [];
-		this._cleanupMcp();
-		cleanupSessionResources(this.sessionId);
-	}
-
-	private _cleanupMcp(): void {
 		if (this._mcpManager) {
 			void this._mcpManager.stop().catch(() => {});
 			this._mcpManager = null;
 		}
+		cleanupSessionResources(this.sessionId);
 	}
 
 	// =========================================================================
@@ -2083,27 +2079,19 @@ export class AgentSession {
 		this._applyExtensionBindings(this._extensionRunner);
 		await this._extensionRunner.emit(this._sessionStartEvent);
 		await this.extendResourcesFromExtensions(this._sessionStartEvent.reason === "reload" ? "reload" : "startup");
-		await this._initMcp();
-	}
 
-	private async _initMcp(): Promise<void> {
 		const mcpServers = this.settingsManager.getMcpServers();
-		if (!mcpServers || Object.keys(mcpServers).length === 0) {
-			return;
-		}
-
-		if (this._mcpManager) {
-			await this._mcpManager.stop();
-			this._mcpManager = null;
-		}
-
-		this._mcpManager = new MCPManager(mcpServers);
-		await this._mcpManager.start();
-
-		const mcpTools = this._mcpManager.getToolDefinitions();
-		if (mcpTools.length > 0) {
-			this._customTools.push(...mcpTools);
-			this._refreshToolRegistry();
+		if (mcpServers && Object.keys(mcpServers).length > 0) {
+			if (this._mcpManager) {
+				await this._mcpManager.stop();
+			}
+			this._mcpManager = new MCPManager();
+			await this._mcpManager.start(mcpServers);
+			const mcpTools = this._mcpManager.getToolDefinitions();
+			if (mcpTools.length > 0) {
+				this._customTools.push(...mcpTools);
+				this._refreshToolRegistry();
+			}
 		}
 	}
 
