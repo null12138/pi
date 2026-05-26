@@ -10990,8 +10990,8 @@ export const MODELS = {
 				cacheRead: 0,
 				cacheWrite: 0,
 			},
-			contextWindow: 131072,
-			maxTokens: 8192,
+			contextWindow: 262144,
+			maxTokens: 32768,
 		} satisfies Model<"openai-completions">,
 		"poolside/laguna-xs.2:free": {
 			id: "poolside/laguna-xs.2:free",
@@ -11717,12 +11717,12 @@ export const MODELS = {
 			input: ["text", "image"],
 			cost: {
 				input: 0.3,
-				output: 3.1999999999999997,
-				cacheRead: 0,
+				output: 2,
+				cacheRead: 0.15,
 				cacheWrite: 0,
 			},
 			contextWindow: 262144,
-			maxTokens: 262144,
+			maxTokens: 65536,
 		} satisfies Model<"openai-completions">,
 		"qwen/qwen3.6-35b-a3b": {
 			id: "qwen/qwen3.6-35b-a3b",
