@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.27] - 2026-05-26
 
 ### Added
 - WebFetch tool: fetches URL content and returns stripped text. No API key required.
