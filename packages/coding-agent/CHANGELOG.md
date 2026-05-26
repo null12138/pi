@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- WebFetch tool: fetches URL content and returns stripped text. No API key required.
+- WebSearch tool: searches the web via DuckDuckGo and returns results with titles, URLs, and snippets. No API key required.
+
 ## [0.75.26] - 2026-05-25
 
 ### Added
