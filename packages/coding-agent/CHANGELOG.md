@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.30] - 2026-05-26
 
 ### Added
 - MCP: SSE and Streamable HTTP transport support (`url` + `transport` config)
