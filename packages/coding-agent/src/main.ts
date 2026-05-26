@@ -617,6 +617,12 @@ export async function main(args: string[], options?: MainOptions) {
 		await runWebMode(runtime);
 	} else {
 		printTimings();
+		const hasPrompt = initialMessage || parsed.messages.length > 0;
+		if (!hasPrompt && process.stdin.isTTY) {
+			await runReplMode(runtime, toPrintOutputMode(appMode));
+			restoreStdout();
+			return;
+		}
 		const exitCode = await runPrintMode(runtime, {
 			mode: toPrintOutputMode(appMode),
 			messages: parsed.messages,
@@ -628,5 +634,80 @@ export async function main(args: string[], options?: MainOptions) {
 			process.exitCode = exitCode;
 		}
 		return;
+	}
+}
+
+async function runReplMode(
+	runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>>,
+	mode: "text" | "json",
+): Promise<void> {
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	const session = runtime.session;
+
+	await session.bindExtensions({
+		commandContextActions: {
+			waitForIdle: () => session.agent.waitForIdle(),
+			newSession: async (newSessionOptions) => runtime.newSession(newSessionOptions),
+			fork: async (entryId, forkOptions) => {
+				const result = await runtime.fork(entryId, forkOptions);
+				return { cancelled: result.cancelled };
+			},
+			navigateTree: async (targetId, navigateOptions) => {
+				const result = await session.navigateTree(targetId, {
+					summarize: navigateOptions?.summarize,
+					customInstructions: navigateOptions?.customInstructions,
+					replaceInstructions: navigateOptions?.replaceInstructions,
+					label: navigateOptions?.label,
+				});
+				return { cancelled: result.cancelled };
+			},
+			switchSession: async (sessionPath, switchOptions) => runtime.switchSession(sessionPath, switchOptions),
+			reload: async () => session.reload(),
+		},
+		onError: (err) => {
+			console.error(chalk.red(`Extension error (${err.extensionPath}): ${err.error}`));
+		},
+	});
+
+	if (mode === "text") {
+		const prompt = (): void => {
+			rl.question(chalk.cyan("> "), async (input) => {
+				const trimmed = input.trim();
+				if (trimmed === "/q" || trimmed === "/quit" || trimmed === "/exit") {
+					rl.close();
+					await runtime.dispose();
+					return;
+				}
+				if (trimmed) {
+					try {
+						await session.prompt(trimmed);
+						const state = session.state;
+						const lastMsg = state.messages[state.messages.length - 1];
+						if (lastMsg?.role === "assistant") {
+							const am = lastMsg as import("@openeryc/pi-ai").AssistantMessage;
+							for (const c of am.content) {
+								if (c.type === "text") console.log(c.text);
+							}
+						}
+					} catch (e) {
+						console.error(chalk.red(e instanceof Error ? e.message : String(e)));
+					}
+				}
+				prompt();
+			});
+		};
+		prompt();
+	} else {
+		rl.on("line", async (line) => {
+			const trimmed = line.trim();
+			if (trimmed === "/q" || trimmed === "/quit" || trimmed === "/exit") {
+				rl.close();
+				await runtime.dispose();
+				return;
+			}
+			if (trimmed) {
+				await session.prompt(trimmed);
+			}
+		});
 	}
 }
