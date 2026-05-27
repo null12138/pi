@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- MCP tool names now use underscores instead of dots to comply with DeepSeek's `^[a-zA-Z0-9_-]+$` function name validation ([#4741](https://github.com/earendil-works/pi/issues/4741))
+
 ## [0.75.30] - 2026-05-26
 
 ### Added

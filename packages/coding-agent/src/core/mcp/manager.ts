@@ -34,6 +34,10 @@ function toTypeBox(schema: MCPToolDefinition["inputSchema"]): ReturnType<typeof 
 	return Type.Object(fields as Record<string, ReturnType<typeof Type.String>>);
 }
 
+function sanitizeMcpName(name: string): string {
+	return name.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 export class MCPManager {
 	private clients = new Map<string, MCPClient>();
 	private tools = new Map<string, ToolDefinition[]>();
@@ -47,8 +51,9 @@ export class MCPManager {
 				const { tools: mcpTools } = await client.listTools();
 				this.clients.set(serverName, client);
 
+				const safeServerName = sanitizeMcpName(serverName);
 				const defs: ToolDefinition[] = mcpTools.map((tool) => ({
-					name: `mcp.${serverName}.${tool.name}`,
+					name: `mcp_${safeServerName}_${sanitizeMcpName(tool.name)}`,
 					label: `mcp.${serverName}.${tool.name}`,
 					description: tool.description
 						? `${tool.description} (from MCP server "${serverName}")`
