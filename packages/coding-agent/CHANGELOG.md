@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- `/mcp` shows compact server list; `/mcp <name>` toggles and expands tool details
+- `/mcp ` tab-completion autocompletes server names
+
 ## [0.75.35] - 2026-05-28
 
 ### Added

@@ -457,31 +457,33 @@ export class InteractiveMode {
 		const modelCommand = slashCommands.find((command) => command.name === "model");
 		if (modelCommand) {
 			modelCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
-				// Get available models (scoped or from registry)
 				const models =
 					this.session.scopedModels.length > 0
 						? this.session.scopedModels.map((s) => s.model)
 						: this.session.modelRegistry.getAvailable();
-
 				if (models.length === 0) return null;
-
-				// Create items with provider/id format
-				const items = models.map((m) => ({
-					id: m.id,
-					provider: m.provider,
-					label: `${m.provider}/${m.id}`,
-				}));
-
-				// Fuzzy filter by model ID + provider (allows "opus anthropic" to match)
+				const items = models.map((m) => ({ id: m.id, provider: m.provider, label: `${m.provider}/${m.id}` }));
 				const filtered = fuzzyFilter(items, prefix, (item) => `${item.id} ${item.provider}`);
-
 				if (filtered.length === 0) return null;
+				return filtered.map((item) => ({ value: item.label, label: item.id, description: item.provider }));
+			};
+		}
 
-				return filtered.map((item) => ({
-					value: item.label,
-					label: item.id,
-					description: item.provider,
-				}));
+		// MCP command: autocomplete server names
+		const mcpCommand = slashCommands.find((command) => command.name === "mcp");
+		if (mcpCommand) {
+			mcpCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+				const servers = this.settingsManager.getMcpServers();
+				if (!servers) return null;
+				const names = Object.keys(servers);
+				if (names.length === 0) return null;
+				const filtered = fuzzyFilter(
+					names.map((n) => ({ label: n })),
+					prefix,
+					(item) => item.label,
+				);
+				if (filtered.length === 0) return null;
+				return filtered.map((item) => ({ value: item.label, label: item.label }));
 			};
 		}
 
@@ -5266,16 +5268,14 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private handleMcpCommand(): void {
+	private handleMcpCommand(highlightServer?: string): void {
 		const configuredServers = this.settingsManager.getMcpServers();
 		const allTools = this.session.getAllTools();
 
-		// Group MCP tools by server name
 		const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
 		const toolsByServer = new Map<string, typeof mcpTools>();
 		for (const tool of mcpTools) {
-			const prefix = "mcp_";
-			const rest = tool.name.slice(prefix.length);
+			const rest = tool.name.slice(4);
 			const secondUnderscore = rest.indexOf("_");
 			const serverName = secondUnderscore === -1 ? rest : rest.slice(0, secondUnderscore);
 			const existing = toolsByServer.get(serverName);
@@ -5301,7 +5301,7 @@ export class InteractiveMode {
 		}
 
 		let info = `${theme.bold("MCP Servers")}\n`;
-		info += `${theme.fg("dim", "Use /mcp <name> to toggle a server on/off")}\n\n`;
+		info += `${theme.fg("dim", "Use /mcp <name> to toggle or view details")}\n\n`;
 
 		let idx = 0;
 		for (const [serverName, config] of Object.entries(configuredServers)) {
@@ -5318,9 +5318,10 @@ export class InteractiveMode {
 			}
 			const toggleHint = disabled ? "[/mcp " + serverName + " to enable]" : "[/mcp " + serverName + " to disable]";
 			const transport = config.url ? (config.transport ?? "sse") : config.command ? "stdio" : "unknown";
+			const toolCount = tools.length;
 
 			info += `${theme.bold(++idx + ". " + serverName)} ${status}  ${theme.fg("dim", toggleHint)}\n`;
-			info += `${theme.fg("dim", `   Transport: ${transport}`)}\n`;
+			info += `${theme.fg("dim", `   Transport: ${transport}  |  Tools: ${toolCount}`)}\n`;
 			if (config.command) {
 				const cmd = config.args ? `${config.command} ${config.args.join(" ")}` : config.command;
 				info += `${theme.fg("dim", `   Command: ${cmd}`)}\n`;
@@ -5328,8 +5329,9 @@ export class InteractiveMode {
 			if (config.url) {
 				info += `${theme.fg("dim", `   URL: ${config.url}`)}\n`;
 			}
-			if (connected) {
-				info += `${theme.fg("dim", `   Tools: ${tools.length}`)}\n`;
+
+			// Show detailed tool list only for highlighted server
+			if (highlightServer === serverName && connected) {
 				for (const tool of tools) {
 					const desc = tool.description ? ` - ${tool.description.split("\n")[0].slice(0, 80)}` : "";
 					info += `${theme.fg("dim", `     ${tool.name}${desc}`)}\n`;
@@ -5364,7 +5366,7 @@ export class InteractiveMode {
 				0,
 			),
 		);
-		this.handleMcpCommand();
+		this.handleMcpCommand(serverName);
 	}
 
 	private async handleUsageCommand(): Promise<void> {
