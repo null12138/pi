@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.33] - 2026-05-28
 
 ### Added
 - `/mcp` slash command to display MCP server status and tools
