@@ -5280,29 +5280,35 @@ export class InteractiveMode {
 
 	private showMcpSelector(highlightServer?: string): void {
 		const configured = this.settingsManager.getMcpServers();
-		const allTools = this.session.getAllTools();
-		const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
 
-		const toolCountByServer = new Map<string, number>();
-		for (const tool of mcpTools) {
-			const rest = tool.name.slice(4);
-			const idx = rest.indexOf("_");
-			const srv = idx === -1 ? rest : rest.slice(0, idx);
-			toolCountByServer.set(srv, (toolCountByServer.get(srv) ?? 0) + 1);
-		}
+		const buildItems = (): McpServerItem[] => {
+			const allTools = this.session.getAllTools();
+			const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
+			const cnt = new Map<string, number>();
+			for (const t of mcpTools) {
+				const rest = t.name.slice(4);
+				const idx = rest.indexOf("_");
+				const srv = idx === -1 ? rest : rest.slice(0, idx);
+				cnt.set(srv, (cnt.get(srv) ?? 0) + 1);
+			}
+			return (configured ? Object.entries(configured) : []).map(([name, c]) => {
+				const disabled = c.enabled === false;
+				const connected = (cnt.get(name) ?? 0) > 0;
+				const transport = c.url ? (c.transport ?? "sse") : c.command ? "stdio" : "unknown";
+				return {
+					name,
+					status: disabled
+						? ("disabled" as const)
+						: connected
+							? ("connected" as const)
+							: ("disconnected" as const),
+					toolCount: cnt.get(name) ?? 0,
+					transport,
+				};
+			});
+		};
 
-		const items: McpServerItem[] = (configured ? Object.entries(configured) : []).map(([name, cfg]) => {
-			const disabled = cfg.enabled === false;
-			const connected = (toolCountByServer.get(name) ?? 0) > 0;
-			const transport = cfg.url ? (cfg.transport ?? "sse") : cfg.command ? "stdio" : "unknown";
-			return {
-				name,
-				status: disabled ? "disabled" : connected ? "connected" : "disconnected",
-				toolCount: toolCountByServer.get(name) ?? 0,
-				transport,
-			};
-		});
-
+		const items = buildItems();
 		if (items.length === 0) {
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(
@@ -5327,6 +5333,7 @@ export class InteractiveMode {
 
 		this.showSelector((done) => {
 			const selector = new McpSelectorComponent(
+				"MCP Servers",
 				items,
 				async (name) => {
 					const server = configured?.[name];
@@ -5334,8 +5341,7 @@ export class InteractiveMode {
 					const currentEnabled = server.enabled !== false;
 					this.settingsManager.setMcpServerEnabled(name, !currentEnabled);
 					await this.session.reloadMcp();
-					done();
-					this.showStatus(`${name} ${currentEnabled ? "disabled" : "enabled"}`);
+					selector.setItems(buildItems());
 				},
 				() => done(),
 			);
@@ -5345,7 +5351,6 @@ export class InteractiveMode {
 
 	private showSkillsSelector(): void {
 		const skills = this.session.resourceLoader.getSkills().skills;
-		const disabledSkills = this.settingsManager.getDisabledSkills();
 
 		if (skills.length === 0) {
 			this.chatContainer.addChild(new Spacer(1));
@@ -5354,24 +5359,27 @@ export class InteractiveMode {
 			return;
 		}
 
-		this.showSelector((done) => {
-			const items: McpServerItem[] = skills.map((s) => {
+		const buildItems = (): McpServerItem[] => {
+			const disabledSkills = this.settingsManager.getDisabledSkills();
+			return skills.map((s) => {
 				const isDisabled = disabledSkills.includes(s.name) || s.disableModelInvocation;
 				return {
 					name: s.name,
 					status: isDisabled ? ("disabled" as const) : ("connected" as const),
 					toolCount: 0,
-					transport: s.description.length > 60 ? s.description.slice(0, 57) + "..." : s.description,
+					transport: s.description.length > 60 ? `${s.description.slice(0, 57)}...` : s.description,
 				};
 			});
+		};
 
+		this.showSelector((done) => {
 			const selector = new McpSelectorComponent(
-				items,
+				"Skills",
+				buildItems(),
 				(name) => {
 					this.settingsManager.toggleSkillDisabled(name);
 					this.session.setActiveToolsByName(this.session.getActiveToolNames());
-					done();
-					this.showStatus(`Skill "${name}" toggled`);
+					selector.setItems(buildItems());
 				},
 				() => done(),
 			);
