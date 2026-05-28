@@ -99,6 +99,7 @@ export interface Settings {
 	prompts?: string[]; // Array of local prompt template paths or directories
 	themes?: string[]; // Array of local theme file paths or directories
 	enableSkillCommands?: boolean; // default: true - register skills as /skill:name commands
+	disabledSkills?: string[]; // skill names to disable (runtime toggle, no file edits)
 	terminal?: TerminalSettings;
 	images?: ImageSettings;
 	enabledModels?: string[]; // Model patterns for cycling (same format as --models CLI flag)
@@ -932,6 +933,23 @@ export class SettingsManager {
 	setEnableSkillCommands(enabled: boolean): void {
 		this.globalSettings.enableSkillCommands = enabled;
 		this.markModified("enableSkillCommands");
+		this.save();
+	}
+
+	getDisabledSkills(): string[] {
+		return this.settings.disabledSkills ?? [];
+	}
+
+	toggleSkillDisabled(skillName: string): void {
+		const disabled = this.settings.disabledSkills ?? [];
+		const idx = disabled.indexOf(skillName);
+		if (idx === -1) {
+			disabled.push(skillName);
+		} else {
+			disabled.splice(idx, 1);
+		}
+		this.globalSettings.disabledSkills = disabled;
+		this.markModified("disabledSkills");
 		this.save();
 	}
 

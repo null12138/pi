@@ -5345,6 +5345,8 @@ export class InteractiveMode {
 
 	private showSkillsSelector(): void {
 		const skills = this.session.resourceLoader.getSkills().skills;
+		const disabledSkills = this.settingsManager.getDisabledSkills();
+
 		if (skills.length === 0) {
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(new Text(theme.fg("dim", "No skills loaded."), 1, 0));
@@ -5353,15 +5355,23 @@ export class InteractiveMode {
 		}
 
 		this.showSelector((done) => {
-			const selector = new McpSelectorComponent(
-				skills.map((s) => ({
+			const items: McpServerItem[] = skills.map((s) => {
+				const isDisabled = disabledSkills.includes(s.name) || s.disableModelInvocation;
+				return {
 					name: s.name,
-					status: s.disableModelInvocation ? ("disabled" as const) : ("connected" as const),
+					status: isDisabled ? ("disabled" as const) : ("connected" as const),
 					toolCount: 0,
-					transport: s.description.slice(0, 60),
-				})),
-				(_name) => {
+					transport: s.description.length > 60 ? s.description.slice(0, 57) + "..." : s.description,
+				};
+			});
+
+			const selector = new McpSelectorComponent(
+				items,
+				(name) => {
+					this.settingsManager.toggleSkillDisabled(name);
+					this.session.setActiveToolsByName(this.session.getActiveToolNames());
 					done();
+					this.showStatus(`Skill "${name}" toggled`);
 				},
 				() => done(),
 			);

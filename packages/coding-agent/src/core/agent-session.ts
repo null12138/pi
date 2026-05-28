@@ -942,6 +942,8 @@ export class AgentSession {
 		const appendSystemPrompt =
 			loaderAppendSystemPrompt.length > 0 ? loaderAppendSystemPrompt.join("\n\n") : undefined;
 		const loadedSkills = this._resourceLoader.getSkills().skills;
+		const disabledSkills = new Set(this.settingsManager.getDisabledSkills());
+		const activeSkills = loadedSkills.filter((s) => !disabledSkills.has(s.name) && !s.disableModelInvocation);
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
 
 		// Collect MCP tools grouped by server name
@@ -969,7 +971,7 @@ export class AgentSession {
 
 		this._baseSystemPromptOptions = {
 			cwd: this._cwd,
-			skills: loadedSkills,
+			skills: activeSkills,
 			contextFiles: loadedContextFiles,
 			customPrompt: loaderSystemPrompt,
 			appendSystemPrompt,
