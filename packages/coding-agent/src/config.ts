@@ -124,7 +124,7 @@ function getSelfUpdateCommandForMethod(
 			);
 		case "bun":
 			return makeSelfUpdateCommand(
-				makeSelfUpdateCommandStep("bun", ["install", "-g", "--ignore-scripts", updatePackageName]),
+				makeSelfUpdateCommandStep("bun", ["install", "-g", updatePackageName]),
 				updatePackageName === installedPackageName
 					? undefined
 					: makeSelfUpdateCommandStep("bun", ["uninstall", "-g", installedPackageName]),
