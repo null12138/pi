@@ -141,6 +141,12 @@ export class ToolExecutionComponent extends Container {
 		if (!output) {
 			return undefined;
 		}
+		if (!this.expanded && !this.isPartial) {
+			const firstLine = output.split("\n")[0].slice(0, 120);
+			const lineCount = output.split("\n").length;
+			const hint = lineCount > 1 ? ` (${lineCount} lines, press o to expand)` : "";
+			return new Text(theme.fg("toolOutput", firstLine + hint), 0, 0);
+		}
 		return new Text(theme.fg("toolOutput", output), 0, 0);
 	}
 
@@ -345,7 +351,14 @@ export class ToolExecutionComponent extends Container {
 		}
 		const output = this.getTextOutput();
 		if (output) {
-			text += `\n${output}`;
+			if (!this.expanded && !this.isPartial) {
+				const firstLine = output.split("\n")[0].slice(0, 120);
+				const lineCount = output.split("\n").length;
+				const hint = lineCount > 1 ? ` (${lineCount} lines, press o to expand)` : "";
+				text += `\n${firstLine}${hint}`;
+			} else {
+				text += `\n${output}`;
+			}
 		}
 		return text;
 	}

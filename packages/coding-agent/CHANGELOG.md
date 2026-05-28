@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- MCP tool execution results respect expand/collapse state (press `o` to expand)
+
 ## [0.75.36] - 2026-05-28
 
 ### Changed
