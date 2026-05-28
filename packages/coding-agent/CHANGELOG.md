@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- MCP tools now appear as `<available_mcp_tools>` block in system prompt, grouped by server with descriptions
+- MCP tool prompt snippets now show `[serverName] description` for better context
+
 ## [0.75.33] - 2026-05-28
 
 ### Added

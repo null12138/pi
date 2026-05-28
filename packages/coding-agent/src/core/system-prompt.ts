@@ -22,6 +22,8 @@ export interface BuildSystemPromptOptions {
 	contextFiles?: Array<{ path: string; content: string }>;
 	/** Pre-loaded skills. */
 	skills?: Skill[];
+	/** MCP tools grouped by server name. */
+	mcpTools?: Array<{ serverName: string; tools: Array<{ name: string; description: string }> }>;
 	/** Project memory content (MEMORY.md). */
 	memory?: string;
 }
@@ -37,6 +39,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		cwd,
 		contextFiles: providedContextFiles,
 		skills: providedSkills,
+		mcpTools: providedMcpTools,
 		memory,
 	} = options;
 	const resolvedCwd = cwd;
@@ -79,6 +82,11 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		const customPromptHasRead = !selectedTools || selectedTools.includes("read");
 		if (customPromptHasRead && skills.length > 0) {
 			prompt += formatSkillsForPrompt(skills);
+		}
+
+		// Append MCP tools section
+		if (providedMcpTools && providedMcpTools.length > 0) {
+			prompt += formatMcpToolsForPrompt(providedMcpTools);
 		}
 
 		// Add date and working directory last
@@ -183,9 +191,48 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 		prompt += formatSkillsForPrompt(skills);
 	}
 
+	// Append MCP tools section
+	if (providedMcpTools && providedMcpTools.length > 0) {
+		prompt += formatMcpToolsForPrompt(providedMcpTools);
+	}
+
 	// Add date and working directory last
 	prompt += `\nCurrent date: ${date}`;
 	prompt += `\nCurrent working directory: ${promptCwd}`;
 
 	return prompt;
+}
+
+function xmlEscape(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&apos;");
+}
+
+function formatMcpToolsForPrompt(
+	servers: Array<{ serverName: string; tools: Array<{ name: string; description: string }> }>,
+): string {
+	const lines = [
+		"\n\nThe following MCP (Model Context Protocol) tools are available from connected servers:",
+		"",
+		"<available_mcp_tools>",
+	];
+
+	for (const server of servers) {
+		lines.push(`  <server name="${xmlEscape(server.serverName)}">`);
+		for (const tool of server.tools) {
+			lines.push("    <tool>");
+			lines.push(`      <name>${xmlEscape(tool.name)}</name>`);
+			lines.push(`      <description>${xmlEscape(tool.description)}</description>`);
+			lines.push("    </tool>");
+		}
+		lines.push("  </server>");
+	}
+
+	lines.push("</available_mcp_tools>");
+
+	return lines.join("\n");
 }

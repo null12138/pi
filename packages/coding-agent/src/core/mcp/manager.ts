@@ -58,7 +58,9 @@ export class MCPManager {
 					description: tool.description
 						? `${tool.description} (from MCP server "${serverName}")`
 						: `Tool from MCP server "${serverName}"`,
-					promptSnippet: `mcp.${serverName}.${tool.name}`,
+					promptSnippet: tool.description
+						? `[${serverName}] ${tool.description.split("\n")[0]}`
+						: `[${serverName}] ${tool.name}`,
 					parameters: toTypeBox(tool.inputSchema),
 					renderShell: "default" as const,
 					executionMode: "sequential" as const,

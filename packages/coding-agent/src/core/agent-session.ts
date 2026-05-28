@@ -944,6 +944,29 @@ export class AgentSession {
 		const loadedSkills = this._resourceLoader.getSkills().skills;
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
 
+		// Collect MCP tools grouped by server name
+		const mcpTools: Array<{ serverName: string; tools: Array<{ name: string; description: string }> }> = [];
+		const mcpServerMap = new Map<string, Array<{ name: string; description: string }>>();
+		for (const name of validToolNames) {
+			if (!name.startsWith("mcp_")) continue;
+			const def = this._toolDefinitions.get(name);
+			if (!def) continue;
+			// Parse mcp_<server>_<tool>
+			const rest = name.slice(4);
+			const underscoreIdx = rest.indexOf("_");
+			const serverName = underscoreIdx === -1 ? rest : rest.slice(0, underscoreIdx);
+			const desc = def.definition.description || `Tool from MCP server "${serverName}"`;
+			const existing = mcpServerMap.get(serverName);
+			if (existing) {
+				existing.push({ name, description: desc });
+			} else {
+				mcpServerMap.set(serverName, [{ name, description: desc }]);
+			}
+		}
+		for (const [serverName, tools] of mcpServerMap) {
+			mcpTools.push({ serverName, tools });
+		}
+
 		this._baseSystemPromptOptions = {
 			cwd: this._cwd,
 			skills: loadedSkills,
@@ -953,6 +976,7 @@ export class AgentSession {
 			selectedTools: validToolNames,
 			toolSnippets,
 			promptGuidelines,
+			mcpTools: mcpTools.length > 0 ? mcpTools : undefined,
 			memory: this._resourceLoader.getMemory(),
 		};
 		return buildSystemPrompt(this._baseSystemPromptOptions);
