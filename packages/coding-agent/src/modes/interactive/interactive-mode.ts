@@ -2471,6 +2471,9 @@ export class InteractiveMode {
 			text = text.trim();
 			if (!text) return;
 
+			// Add to history before handling (so up/down can recall commands too)
+			this.editor.addToHistory?.(text);
+
 			// Handle commands
 			if (text === "/settings") {
 				this.showSettingsSelector();
