@@ -1,17 +1,17 @@
 {
 	"name": "@openeryc/pi-coding-agent",
-	"version": "0.75.41",
+	"version": "0.75.42",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@openeryc/pi-coding-agent",
-			"version": "0.75.41",
+			"version": "0.75.42",
 			"license": "MIT",
 			"dependencies": {
-				"@openeryc/pi-agent-core": "^0.75.41",
-				"@openeryc/pi-ai": "^0.75.41",
-				"@openeryc/pi-tui": "^0.75.41",
+				"@openeryc/pi-agent-core": "^0.75.42",
+				"@openeryc/pi-ai": "^0.75.42",
+				"@openeryc/pi-tui": "^0.75.42",
 				"@silvia-odwyer/photon-node": "0.3.4",
 				"chalk": "5.6.2",
 				"cross-spawn": "7.0.6",
@@ -699,11 +699,11 @@
 			]
 		},
 		"node_modules/@openeryc/pi-agent-core": {
-			"version": "0.75.41",
-			"resolved": "https://registry.npmjs.org/@openeryc/pi-agent-core/-/pi-agent-core-0.75.41.tgz",
+			"version": "0.75.42",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-agent-core/-/pi-agent-core-0.75.42.tgz",
 			"license": "MIT",
 			"dependencies": {
-				"@openeryc/pi-ai": "^0.75.41",
+				"@openeryc/pi-ai": "^0.75.42",
 				"ignore": "7.0.5",
 				"typebox": "1.1.38",
 				"yaml": "2.9.0"
@@ -713,8 +713,8 @@
 			}
 		},
 		"node_modules/@openeryc/pi-ai": {
-			"version": "0.75.41",
-			"resolved": "https://registry.npmjs.org/@openeryc/pi-ai/-/pi-ai-0.75.41.tgz",
+			"version": "0.75.42",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-ai/-/pi-ai-0.75.42.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"@anthropic-ai/sdk": "0.91.1",
@@ -735,8 +735,8 @@
 			}
 		},
 		"node_modules/@openeryc/pi-tui": {
-			"version": "0.75.41",
-			"resolved": "https://registry.npmjs.org/@openeryc/pi-tui/-/pi-tui-0.75.41.tgz",
+			"version": "0.75.42",
+			"resolved": "https://registry.npmjs.org/@openeryc/pi-tui/-/pi-tui-0.75.42.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",
