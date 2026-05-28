@@ -2157,6 +2157,11 @@ export class AgentSession {
 		}
 	}
 
+	/** Reload MCP servers after config changes (e.g. toggle enabled). */
+	async reloadMcp(): Promise<void> {
+		await this._initMcp();
+	}
+
 	private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {
 		if (!this._extensionRunner.hasHandlers("resources_discover")) {
 			return;

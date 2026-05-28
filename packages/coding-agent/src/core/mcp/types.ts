@@ -2,6 +2,7 @@
  * MCP (Model Context Protocol) client types.
  */
 export interface MCPServerConfig {
+	enabled?: boolean;
 	command?: string;
 	args?: string[];
 	env?: Record<string, string>;

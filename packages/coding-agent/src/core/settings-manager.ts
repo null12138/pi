@@ -116,6 +116,7 @@ export interface Settings {
 	mcpServers?: Record<
 		string,
 		{
+			enabled?: boolean;
 			command?: string;
 			args?: string[];
 			env?: Record<string, string>;
@@ -1100,10 +1101,21 @@ export class SettingsManager {
 		this.save();
 	}
 
+	setMcpServerEnabled(serverName: string, enabled: boolean): void {
+		if (!this.globalSettings.mcpServers?.[serverName]) return;
+		this.globalSettings.mcpServers[serverName] = {
+			...this.globalSettings.mcpServers[serverName],
+			enabled,
+		};
+		this.markModified("mcpServers");
+		this.save();
+	}
+
 	getMcpServers():
 		| Record<
 				string,
 				{
+					enabled?: boolean;
 					command?: string;
 					args?: string[];
 					env?: Record<string, string>;

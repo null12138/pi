@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- MCP servers support `enabled` field to toggle on/off from settings.json
+- `/mcp <name>` subcommand to toggle MCP server enabled/disabled at runtime
+- `/mcp` now shows numbered server list with toggle hints and disabled state
+
 ## [0.75.34] - 2026-05-28
 
 ### Added

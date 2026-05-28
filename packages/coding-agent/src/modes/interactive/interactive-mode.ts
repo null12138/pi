@@ -2526,6 +2526,12 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text.startsWith("/mcp ")) {
+				const name = text.slice(5).trim();
+				this.handleMcpToggle(name);
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/usage") {
 				this.editor.setText("");
 				await this.handleUsageCommand();
@@ -5268,7 +5274,6 @@ export class InteractiveMode {
 		const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
 		const toolsByServer = new Map<string, typeof mcpTools>();
 		for (const tool of mcpTools) {
-			// mcp_<server>_<tool> - server name is everything between the first two underscores
 			const prefix = "mcp_";
 			const rest = tool.name.slice(prefix.length);
 			const secondUnderscore = rest.indexOf("_");
@@ -5295,28 +5300,39 @@ export class InteractiveMode {
 			return;
 		}
 
-		let info = `${theme.bold("MCP Servers")}\n\n`;
+		let info = `${theme.bold("MCP Servers")}\n`;
+		info += `${theme.fg("dim", "Use /mcp <name> to toggle a server on/off")}\n\n`;
 
+		let idx = 0;
 		for (const [serverName, config] of Object.entries(configuredServers)) {
 			const tools = toolsByServer.get(serverName) ?? [];
+			const disabled = config.enabled === false;
 			const connected = tools.length > 0;
-			const status = connected ? theme.fg("success", "connected") : theme.fg("warning", "disconnected");
+			let status: string;
+			if (disabled) {
+				status = theme.fg("muted", "disabled");
+			} else if (connected) {
+				status = theme.fg("success", "connected");
+			} else {
+				status = theme.fg("warning", "disconnected");
+			}
+			const toggleHint = disabled ? "[/mcp " + serverName + " to enable]" : "[/mcp " + serverName + " to disable]";
 			const transport = config.url ? (config.transport ?? "sse") : config.command ? "stdio" : "unknown";
 
-			info += `${theme.bold(serverName)} ${status}\n`;
-			info += `${theme.fg("dim", `  Transport: ${transport}`)}\n`;
+			info += `${theme.bold(++idx + ". " + serverName)} ${status}  ${theme.fg("dim", toggleHint)}\n`;
+			info += `${theme.fg("dim", `   Transport: ${transport}`)}\n`;
 			if (config.command) {
 				const cmd = config.args ? `${config.command} ${config.args.join(" ")}` : config.command;
-				info += `${theme.fg("dim", `  Command: ${cmd}`)}\n`;
+				info += `${theme.fg("dim", `   Command: ${cmd}`)}\n`;
 			}
 			if (config.url) {
-				info += `${theme.fg("dim", `  URL: ${config.url}`)}\n`;
+				info += `${theme.fg("dim", `   URL: ${config.url}`)}\n`;
 			}
 			if (connected) {
-				info += `${theme.fg("dim", `  Tools: ${tools.length}`)}\n`;
+				info += `${theme.fg("dim", `   Tools: ${tools.length}`)}\n`;
 				for (const tool of tools) {
 					const desc = tool.description ? ` - ${tool.description.split("\n")[0].slice(0, 80)}` : "";
-					info += `${theme.fg("dim", `    ${tool.name}${desc}`)}\n`;
+					info += `${theme.fg("dim", `     ${tool.name}${desc}`)}\n`;
 				}
 			}
 			info += "\n";
@@ -5324,6 +5340,31 @@ export class InteractiveMode {
 
 		this.chatContainer.addChild(new Text(info, 1, 0));
 		this.ui.requestRender();
+	}
+
+	private async handleMcpToggle(serverName: string): Promise<void> {
+		const mcpServers = this.settingsManager.getMcpServers();
+		if (!mcpServers || !mcpServers[serverName]) {
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(new Text(theme.fg("warning", `MCP server "${serverName}" not found.`), 1, 0));
+			this.ui.requestRender();
+			return;
+		}
+
+		const currentEnabled = mcpServers[serverName].enabled !== false;
+		this.settingsManager.setMcpServerEnabled(serverName, !currentEnabled);
+
+		await this.session.reloadMcp();
+
+		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(
+			new Text(
+				`${theme.bold(serverName)} ${theme.fg(currentEnabled ? "muted" : "success", currentEnabled ? "disabled" : "enabled")}`,
+				1,
+				0,
+			),
+		);
+		this.handleMcpCommand();
 	}
 
 	private async handleUsageCommand(): Promise<void> {

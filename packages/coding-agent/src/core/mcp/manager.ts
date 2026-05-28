@@ -45,6 +45,7 @@ export class MCPManager {
 
 	async start(serverConfigs: Record<string, MCPServerConfig>): Promise<void> {
 		for (const [serverName, config] of Object.entries(serverConfigs)) {
+			if (config.enabled === false) continue;
 			try {
 				const client = new MCPClient();
 				await client.connect(config);
