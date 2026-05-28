@@ -3874,6 +3874,7 @@ export class InteractiveMode {
 			this.editorContainer.clear();
 			this.editorContainer.addChild(this.editor);
 			this.ui.setFocus(this.editor);
+			this.ui.requestRender();
 		};
 		const { component, focus } = create(done);
 		this.editorContainer.clear();
