@@ -113,6 +113,7 @@ import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
+import { McpSelectorComponent, type McpServerItem } from "./components/mcp-selector.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "./components/oauth-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
@@ -2524,14 +2525,19 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/mcp") {
-				this.handleMcpCommand();
 				this.editor.setText("");
+				this.showMcpSelector();
 				return;
 			}
 			if (text.startsWith("/mcp ")) {
 				const name = text.slice(5).trim();
-				this.handleMcpToggle(name);
 				this.editor.setText("");
+				this.showMcpSelector(name);
+				return;
+			}
+			if (text === "/skills") {
+				this.editor.setText("");
+				this.showSkillsSelector();
 				return;
 			}
 			if (text === "/usage") {
@@ -5268,27 +5274,33 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private handleMcpCommand(highlightServer?: string): void {
-		const configuredServers = this.settingsManager.getMcpServers();
+	private showMcpSelector(highlightServer?: string): void {
+		const configured = this.settingsManager.getMcpServers();
 		const allTools = this.session.getAllTools();
-
 		const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
-		const toolsByServer = new Map<string, typeof mcpTools>();
+
+		const toolCountByServer = new Map<string, number>();
 		for (const tool of mcpTools) {
 			const rest = tool.name.slice(4);
-			const secondUnderscore = rest.indexOf("_");
-			const serverName = secondUnderscore === -1 ? rest : rest.slice(0, secondUnderscore);
-			const existing = toolsByServer.get(serverName);
-			if (existing) {
-				existing.push(tool);
-			} else {
-				toolsByServer.set(serverName, [tool]);
-			}
+			const idx = rest.indexOf("_");
+			const srv = idx === -1 ? rest : rest.slice(0, idx);
+			toolCountByServer.set(srv, (toolCountByServer.get(srv) ?? 0) + 1);
 		}
 
-		this.chatContainer.addChild(new Spacer(1));
+		const items: McpServerItem[] = (configured ? Object.entries(configured) : []).map(([name, cfg]) => {
+			const disabled = cfg.enabled === false;
+			const connected = (toolCountByServer.get(name) ?? 0) > 0;
+			const transport = cfg.url ? (cfg.transport ?? "sse") : cfg.command ? "stdio" : "unknown";
+			return {
+				name,
+				status: disabled ? "disabled" : connected ? "connected" : "disconnected",
+				toolCount: toolCountByServer.get(name) ?? 0,
+				transport,
+			};
+		});
 
-		if (!configuredServers || Object.keys(configuredServers).length === 0) {
+		if (items.length === 0) {
+			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(
 				new Text(
 					`${theme.bold("MCP Servers")}\n\n${theme.fg("dim", "No MCP servers configured. Add 'mcpServers' to settings.json.")}`,
@@ -5300,73 +5312,57 @@ export class InteractiveMode {
 			return;
 		}
 
-		let info = `${theme.bold("MCP Servers")}\n`;
-		info += `${theme.fg("dim", "Use /mcp <name> to toggle or view details")}\n\n`;
-
-		let idx = 0;
-		for (const [serverName, config] of Object.entries(configuredServers)) {
-			const tools = toolsByServer.get(serverName) ?? [];
-			const disabled = config.enabled === false;
-			const connected = tools.length > 0;
-			let status: string;
-			if (disabled) {
-				status = theme.fg("muted", "disabled");
-			} else if (connected) {
-				status = theme.fg("success", "connected");
-			} else {
-				status = theme.fg("warning", "disconnected");
+		if (highlightServer) {
+			const server = configured?.[highlightServer];
+			if (server) {
+				const currentEnabled = server.enabled !== false;
+				this.settingsManager.setMcpServerEnabled(highlightServer, !currentEnabled);
+				this.session.reloadMcp();
 			}
-			const toggleHint = disabled ? "[/mcp " + serverName + " to enable]" : "[/mcp " + serverName + " to disable]";
-			const transport = config.url ? (config.transport ?? "sse") : config.command ? "stdio" : "unknown";
-			const toolCount = tools.length;
-
-			info += `${theme.bold(++idx + ". " + serverName)} ${status}  ${theme.fg("dim", toggleHint)}\n`;
-			info += `${theme.fg("dim", `   Transport: ${transport}  |  Tools: ${toolCount}`)}\n`;
-			if (config.command) {
-				const cmd = config.args ? `${config.command} ${config.args.join(" ")}` : config.command;
-				info += `${theme.fg("dim", `   Command: ${cmd}`)}\n`;
-			}
-			if (config.url) {
-				info += `${theme.fg("dim", `   URL: ${config.url}`)}\n`;
-			}
-
-			// Show detailed tool list only for highlighted server
-			if (highlightServer === serverName && connected) {
-				for (const tool of tools) {
-					const desc = tool.description ? ` - ${tool.description.split("\n")[0].slice(0, 80)}` : "";
-					info += `${theme.fg("dim", `     ${tool.name}${desc}`)}\n`;
-				}
-			}
-			info += "\n";
 		}
 
-		this.chatContainer.addChild(new Text(info, 1, 0));
-		this.ui.requestRender();
+		this.showSelector((done) => {
+			const selector = new McpSelectorComponent(
+				items,
+				async (name) => {
+					const server = configured?.[name];
+					if (!server) return;
+					const currentEnabled = server.enabled !== false;
+					this.settingsManager.setMcpServerEnabled(name, !currentEnabled);
+					await this.session.reloadMcp();
+					done();
+					this.showStatus(`${name} ${currentEnabled ? "disabled" : "enabled"}`);
+				},
+				() => done(),
+			);
+			return { component: selector, focus: selector };
+		});
 	}
 
-	private async handleMcpToggle(serverName: string): Promise<void> {
-		const mcpServers = this.settingsManager.getMcpServers();
-		if (!mcpServers || !mcpServers[serverName]) {
+	private showSkillsSelector(): void {
+		const skills = this.session.resourceLoader.getSkills().skills;
+		if (skills.length === 0) {
 			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(new Text(theme.fg("warning", `MCP server "${serverName}" not found.`), 1, 0));
+			this.chatContainer.addChild(new Text(theme.fg("dim", "No skills loaded."), 1, 0));
 			this.ui.requestRender();
 			return;
 		}
 
-		const currentEnabled = mcpServers[serverName].enabled !== false;
-		this.settingsManager.setMcpServerEnabled(serverName, !currentEnabled);
-
-		await this.session.reloadMcp();
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(
-			new Text(
-				`${theme.bold(serverName)} ${theme.fg(currentEnabled ? "muted" : "success", currentEnabled ? "disabled" : "enabled")}`,
-				1,
-				0,
-			),
-		);
-		this.handleMcpCommand(serverName);
+		this.showSelector((done) => {
+			const selector = new McpSelectorComponent(
+				skills.map((s) => ({
+					name: s.name,
+					status: s.disableModelInvocation ? ("disabled" as const) : ("connected" as const),
+					toolCount: 0,
+					transport: s.description.slice(0, 60),
+				})),
+				(_name) => {
+					done();
+				},
+				() => done(),
+			);
+			return { component: selector, focus: selector };
+		});
 	}
 
 	private async handleUsageCommand(): Promise<void> {

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- `/mcp` now shows interactive selector with arrow-key navigation and Enter to toggle
+- `/skills` command to browse loaded skills
+
+### Changed
+- MCP server management uses TUI selector instead of static text display
+
 ## [0.75.37] - 2026-05-28
 
 ### Fixed
