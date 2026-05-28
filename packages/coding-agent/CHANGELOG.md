@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.38] - 2026-05-28
 
 ### Added
 - `/mcp` now shows interactive selector with arrow-key navigation and Enter to toggle
