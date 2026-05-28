@@ -129,7 +129,11 @@ async function main(): Promise<void> {
 	console.log(`Generated ${outputPath}`);
 }
 
-main().catch((error) => {
-	console.error(error);
-	process.exit(1);
-});
+if (process.env.PI_OFFLINE === "1" || process.env.CI) {
+	console.log("Skipping image model generation in offline/CI mode.");
+} else {
+	main().catch((error) => {
+		console.error(error);
+		process.exit(1);
+	});
+}

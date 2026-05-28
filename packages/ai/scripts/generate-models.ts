@@ -1932,4 +1932,8 @@ export const MODELS = {
 }
 
 // Run the generator
-generateModels().catch(console.error);
+if (process.env.PI_OFFLINE === "1" || process.env.CI) {
+	console.log("Skipping model generation in offline/CI mode.");
+} else {
+	generateModels().catch(console.error);
+}

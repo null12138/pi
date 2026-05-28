@@ -35,6 +35,7 @@ jobs:
       - name: Build
         env:
           PI_OFFLINE: "1"
+          CI: "true"
         run: npm run build
 
       - name: Check
