@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.36] - 2026-05-28
 
 ### Changed
 - `/mcp` shows compact server list; `/mcp <name>` toggles and expands tool details
