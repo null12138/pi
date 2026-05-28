@@ -1,6 +1,6 @@
 {
 	"name": "@openeryc/pi-agent-core",
-	"version": "0.75.34",
+	"version": "0.75.35",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -29,7 +29,7 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {
-		"@openeryc/pi-ai": "^0.75.34",
+		"@openeryc/pi-ai": "^0.75.35",
 		"ignore": "7.0.5",
 		"typebox": "1.1.38",
 		"yaml": "2.9.0"

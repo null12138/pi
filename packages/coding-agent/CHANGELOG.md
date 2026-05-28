@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.35] - 2026-05-28
 
 ### Added
 - MCP servers support `enabled` field to toggle on/off from settings.json
