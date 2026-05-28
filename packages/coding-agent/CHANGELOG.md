@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `/mcp` slash command to display MCP server status and tools
+
 ## [0.75.31] - 2026-05-27
 
 ### Fixed

@@ -2521,6 +2521,11 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
+			if (text === "/mcp") {
+				this.handleMcpCommand();
+				this.editor.setText("");
+				return;
+			}
 			if (text === "/usage") {
 				this.editor.setText("");
 				await this.handleUsageCommand();
@@ -5251,6 +5256,72 @@ export class InteractiveMode {
 		}
 
 		this.chatContainer.addChild(new Spacer(1));
+		this.chatContainer.addChild(new Text(info, 1, 0));
+		this.ui.requestRender();
+	}
+
+	private handleMcpCommand(): void {
+		const configuredServers = this.settingsManager.getMcpServers();
+		const allTools = this.session.getAllTools();
+
+		// Group MCP tools by server name
+		const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
+		const toolsByServer = new Map<string, typeof mcpTools>();
+		for (const tool of mcpTools) {
+			// mcp_<server>_<tool> - server name is everything between the first two underscores
+			const prefix = "mcp_";
+			const rest = tool.name.slice(prefix.length);
+			const secondUnderscore = rest.indexOf("_");
+			const serverName = secondUnderscore === -1 ? rest : rest.slice(0, secondUnderscore);
+			const existing = toolsByServer.get(serverName);
+			if (existing) {
+				existing.push(tool);
+			} else {
+				toolsByServer.set(serverName, [tool]);
+			}
+		}
+
+		this.chatContainer.addChild(new Spacer(1));
+
+		if (!configuredServers || Object.keys(configuredServers).length === 0) {
+			this.chatContainer.addChild(
+				new Text(
+					`${theme.bold("MCP Servers")}\n\n${theme.fg("dim", "No MCP servers configured. Add 'mcpServers' to settings.json.")}`,
+					1,
+					0,
+				),
+			);
+			this.ui.requestRender();
+			return;
+		}
+
+		let info = `${theme.bold("MCP Servers")}\n\n`;
+
+		for (const [serverName, config] of Object.entries(configuredServers)) {
+			const tools = toolsByServer.get(serverName) ?? [];
+			const connected = tools.length > 0;
+			const status = connected ? theme.fg("success", "connected") : theme.fg("warning", "disconnected");
+			const transport = config.url ? (config.transport ?? "sse") : config.command ? "stdio" : "unknown";
+
+			info += `${theme.bold(serverName)} ${status}\n`;
+			info += `${theme.fg("dim", `  Transport: ${transport}`)}\n`;
+			if (config.command) {
+				const cmd = config.args ? `${config.command} ${config.args.join(" ")}` : config.command;
+				info += `${theme.fg("dim", `  Command: ${cmd}`)}\n`;
+			}
+			if (config.url) {
+				info += `${theme.fg("dim", `  URL: ${config.url}`)}\n`;
+			}
+			if (connected) {
+				info += `${theme.fg("dim", `  Tools: ${tools.length}`)}\n`;
+				for (const tool of tools) {
+					const desc = tool.description ? ` - ${tool.description.split("\n")[0].slice(0, 80)}` : "";
+					info += `${theme.fg("dim", `    ${tool.name}${desc}`)}\n`;
+				}
+			}
+			info += "\n";
+		}
+
 		this.chatContainer.addChild(new Text(info, 1, 0));
 		this.ui.requestRender();
 	}
