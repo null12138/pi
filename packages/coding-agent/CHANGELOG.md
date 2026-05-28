@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.34] - 2026-05-28
 
 ### Added
 - MCP tools now appear as `<available_mcp_tools>` block in system prompt, grouped by server with descriptions
