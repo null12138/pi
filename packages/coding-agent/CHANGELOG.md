@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.46] - 2026-05-29
 
 ### Changed
 - HTTP transport upgraded: enabled HTTP/2, keep-alive (60s timeout, 300s max), connection pool (8 connections), and connect timeout (30s) for better network resilience
