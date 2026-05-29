@@ -1,6 +1,8 @@
 import * as undici from "undici";
 
 export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
+/** Default connect timeout to prevent hanging on unreachable hosts */
+export const DEFAULT_HTTP_CONNECT_TIMEOUT_MS = 30_000;
 
 export const HTTP_IDLE_TIMEOUT_CHOICES = [
 	{ label: "30 sec", timeoutMs: 30_000 },
@@ -41,9 +43,19 @@ export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TI
 	if (normalizedTimeoutMs === undefined) {
 		throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
 	}
+	// Use keep-alive to reuse connections across requests, reducing latency and
+	// connection overhead for repeated API calls during agent turns.
+	const connectTimeout = Math.min(
+		DEFAULT_HTTP_CONNECT_TIMEOUT_MS,
+		normalizedTimeoutMs || DEFAULT_HTTP_CONNECT_TIMEOUT_MS,
+	);
 	undici.setGlobalDispatcher(
 		new undici.EnvHttpProxyAgent({
-			allowH2: false,
+			allowH2: true,
+			keepAliveMaxTimeout: 300_000,
+			keepAliveTimeout: 60_000,
+			connections: 8,
+			connectTimeout,
 			bodyTimeout: normalizedTimeoutMs,
 			headersTimeout: normalizedTimeoutMs,
 		}),

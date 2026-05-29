@@ -335,9 +335,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return streamSimple(model, context, {
 				...options,
 				apiKey: auth.apiKey,
-				timeoutMs: options?.timeoutMs ?? providerRetrySettings.timeoutMs,
-				maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
-				maxRetryDelayMs: options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+				timeoutMs: options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? 600_000,
+				maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries ?? 3,
+				maxRetryDelayMs: options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs ?? 60000,
 				headers:
 					attributionHeaders || auth.headers || options?.headers
 						? { ...attributionHeaders, ...auth.headers, ...options?.headers }

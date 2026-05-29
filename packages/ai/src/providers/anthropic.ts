@@ -325,14 +325,66 @@ function consumeLine(text: string): { line: string; rest: string } | null {
 	};
 }
 
+/** Default per-chunk read timeout to detect stalled SSE streams (2 minutes). */
+const DEFAULT_SSE_READ_TIMEOUT_MS = 120_000;
+
 async function* iterateSseMessages(
 	body: ReadableStream<Uint8Array>,
 	signal?: AbortSignal,
+	readTimeoutMs: number = DEFAULT_SSE_READ_TIMEOUT_MS,
 ): AsyncGenerator<ServerSentEvent> {
 	const reader = body.getReader();
 	const decoder = new TextDecoder();
 	const state: SseDecoderState = { event: null, data: [], raw: [] };
 	let buffer = "";
+
+	/**
+	 * Read with timeout. If no data arrives within readTimeoutMs, rejects with a timeout error.
+	 * If the external signal fires, rejects with the abort error instead.
+	 * This detects stalled connections (network drops mid-stream, server hang, etc.)
+	 * and allows retry logic to kick in.
+	 */
+	const readWithTimeout = async () => {
+		if (signal?.aborted) {
+			throw new Error("Request was aborted");
+		}
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		try {
+			const result = await new Promise<Awaited<ReturnType<typeof reader.read>>>((resolve, reject) => {
+				// Start the read
+				const readPromise = reader.read();
+
+				// Set up timeout
+				timeoutId = setTimeout(() => {
+					reject(new Error(`SSE stream read timeout after ${readTimeoutMs}ms`));
+				}, readTimeoutMs);
+
+				// Listen for external abort signal
+				const onExternalAbort = () => {
+					clearTimeout(timeoutId);
+					reject(new Error("Request was aborted"));
+				};
+				signal?.addEventListener("abort", onExternalAbort, { once: true });
+
+				// Resolve/reject with the read result
+				readPromise.then(
+					(result) => {
+						clearTimeout(timeoutId);
+						signal?.removeEventListener("abort", onExternalAbort);
+						resolve(result);
+					},
+					(err) => {
+						clearTimeout(timeoutId);
+						signal?.removeEventListener("abort", onExternalAbort);
+						reject(err);
+					},
+				);
+			});
+			return result;
+		} finally {
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+		}
+	};
 
 	try {
 		while (true) {
@@ -340,7 +392,7 @@ async function* iterateSseMessages(
 				throw new Error("Request was aborted");
 			}
 
-			const { value, done } = await reader.read();
+			const { value, done } = await readWithTimeout();
 			if (done) {
 				break;
 			}

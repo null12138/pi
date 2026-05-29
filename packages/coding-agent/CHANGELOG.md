@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- HTTP transport upgraded: enabled HTTP/2, keep-alive (60s timeout, 300s max), connection pool (8 connections), and connect timeout (30s) for better network resilience
+- Default provider retry settings when not explicitly configured: `timeoutMs` defaults to 600s (10 min), `maxRetries` defaults to 3, `maxRetryDelayMs` defaults to 60s
+- Expanded retryable error pattern matching to catch more transient network errors (DNS failures, TLS errors, Node.js error codes like ECONNREFUSED/ECONNRESET/ETIMEDOUT, undici errors, AbortError)
+
 ## [0.75.42] - 2026-05-28
 
 ## [0.75.41] - 2026-05-28

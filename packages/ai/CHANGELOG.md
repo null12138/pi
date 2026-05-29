@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- SSE stream stall detection with per-chunk read timeout (default 120s) for Anthropic provider, preventing indefinite hangs when the server stops sending data mid-stream
+
 ## [0.75.42] - 2026-05-28
 
 ## [0.75.41] - 2026-05-28
