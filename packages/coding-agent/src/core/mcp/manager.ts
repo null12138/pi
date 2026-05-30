@@ -140,6 +140,24 @@ export class MCPManager {
 			// Resolve effective timeout: per-tool > server default > client default (120s)
 			const toolSpecificTimeoutMs = perToolTimeout?.get(tool.name);
 
+			// Add optional _timeoutMs parameter so the AI can override timeout per-call
+			const baseParams = toTypeBox(tool.inputSchema);
+			// Merge _timeoutMs into the existing schema (preserving required fields)
+			const existingProps = (baseParams as any).properties ?? {};
+			const existingRequired = (baseParams as any).required ?? [];
+			const parameters = Type.Object(
+				{
+					...existingProps,
+					_timeoutMs: Type.Optional(
+						Type.Number({
+							description:
+								"Optional timeout override in milliseconds for this specific call (e.g. 300000 for 5 min, 5000 for 5s). Overrides the server default timeout.",
+						}),
+					),
+				},
+				{ required: existingRequired },
+			);
+
 			return {
 				name: `mcp_${safeServerName}_${sanitizeMcpName(tool.name)}`,
 				label: `mcp.${serverName}.${tool.name}`,
@@ -149,7 +167,7 @@ export class MCPManager {
 				promptSnippet: tool.description
 					? `[${serverName}] ${tool.description.split("\n")[0]}`
 					: `[${serverName}] ${tool.name}`,
-				parameters: toTypeBox(tool.inputSchema),
+				parameters,
 				renderShell: "default" as const,
 				execute: async (_id, params, signal) => {
 					if (!client.isConnected) {
@@ -164,12 +182,17 @@ export class MCPManager {
 						} satisfies AgentToolResult<unknown>;
 					}
 					try {
-						// If a per-tool timeout is configured, race it with the caller's signal
+						// Extract _timeoutMs from params (AI-specified timeout override)
+						const rawParams = params as Record<string, unknown>;
+						const callTimeoutMs =
+							typeof rawParams._timeoutMs === "number" ? rawParams._timeoutMs : toolSpecificTimeoutMs;
+						const { _timeoutMs: _ignored, ...mcpParams } = rawParams;
+
 						const effectiveSignal =
-							toolSpecificTimeoutMs !== undefined
-								? AbortSignal.any([AbortSignal.timeout(toolSpecificTimeoutMs), ...(signal ? [signal] : [])])
+							callTimeoutMs !== undefined
+								? AbortSignal.any([AbortSignal.timeout(callTimeoutMs), ...(signal ? [signal] : [])])
 								: signal;
-						const result = await client.callTool(tool.name, params as Record<string, unknown>, effectiveSignal);
+						const result = await client.callTool(tool.name, mcpParams, effectiveSignal);
 						const text = result.content
 							.map((item) => (item.type === "text" && item.text ? item.text : `[Image: ${item.mimeType}]`))
 							.join("\n");

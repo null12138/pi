@@ -87,7 +87,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		// Append MCP tools section — explicitly note these are callable function tools
 		if (providedMcpTools && providedMcpTools.length > 0) {
 			prompt +=
-				"\n\nThe MCP (Model Context Protocol) tools below are regular callable tools — use them just like any other tool listed above.";
+				"\n\nThe MCP (Model Context Protocol) tools below are regular callable tools — use them just like any other tool listed above. Each accepts an optional `_timeoutMs` parameter to override the timeout for that specific call.";
 			prompt += formatMcpToolsForPrompt(providedMcpTools);
 		}
 
@@ -155,7 +155,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const additionalToolsNote = hasMcpTools
 		? `
-MCP (Model Context Protocol) tools are regular callable tools with the mcp_ prefix — use them just like any other tool. Detailed descriptions are listed below.`
+MCP (Model Context Protocol) tools are regular callable tools with the mcp_ prefix — use them just like any other tool. Each accepts an optional _timeoutMs parameter (in milliseconds) to override the timeout for that specific call (e.g. _timeoutMs: 300000 for 5 minutes).`
 		: "\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
 
 	let prompt = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
@@ -201,7 +201,8 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 
 	// Append MCP tools section
 	if (providedMcpTools && providedMcpTools.length > 0) {
-		prompt += "\n\nMCP tool details:";
+		prompt +=
+			"\n\nMCP tool details (each tool accepts an optional `_timeoutMs` param to override timeout per-call, e.g. `_timeoutMs: 300000` for 5 min):";
 		prompt += formatMcpToolsForPrompt(providedMcpTools);
 	}
 
