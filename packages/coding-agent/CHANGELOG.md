@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.48] - 2026-05-30
 
 ### Added
 - MCP tool calls now support configurable timeout via `timeoutMs` in server config (default: 120s). Use `0` to disable.
