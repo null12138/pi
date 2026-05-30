@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.52] - 2026-05-30
 
 ### Added
 - MCP tools now accept an optional `_timeoutMs` parameter that the AI can use to override timeout per-call (e.g. `_timeoutMs: 300000` for 5 minutes). Stripped before sending to the MCP server. Documented in system prompt.
