@@ -21,6 +21,8 @@ export interface MCPServerConfig {
 	headers?: Record<string, string>;
 	/** Request timeout in milliseconds (default: 120000). 0 = no timeout. */
 	timeoutMs?: number;
+	/** Per-tool timeout overrides (key: tool name, value: timeout in ms). Takes precedence over timeoutMs. */
+	toolTimeouts?: Record<string, number>;
 	/** Auto-reconnect configuration */
 	reconnect?: MCPReconnectConfig;
 }

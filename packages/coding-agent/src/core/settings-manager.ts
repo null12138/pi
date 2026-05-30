@@ -125,6 +125,7 @@ export interface Settings {
 			transport?: "stdio" | "sse" | "http";
 			headers?: Record<string, string>;
 			timeoutMs?: number;
+			toolTimeouts?: Record<string, number>;
 			reconnect?: {
 				enabled?: boolean;
 				maxAttempts?: number;

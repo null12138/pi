@@ -51,6 +51,7 @@ export class MCPManager {
 	private reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	private reconnectAttempts = new Map<string, number>();
 	private _statuses = new Map<string, MCPConnectionStatus>();
+	private toolTimeoutMap = new Map<string, Map<string, number>>();
 
 	/** Called when any server's connection status changes */
 	onStatusChange: MCPStatusChangeHandler | null = null;
@@ -85,6 +86,9 @@ export class MCPManager {
 				continue;
 			}
 			this.serverConfigs.set(serverName, config);
+			if (config.toolTimeouts) {
+				this.toolTimeoutMap.set(serverName, new Map(Object.entries(config.toolTimeouts)));
+			}
 			await this.connectServer(serverName, config);
 		}
 	}
@@ -130,47 +134,59 @@ export class MCPManager {
 	private buildToolDefs(serverName: string, mcpTools: MCPToolDefinition[]): void {
 		const safeServerName = sanitizeMcpName(serverName);
 		const client = this.clients.get(serverName)!;
-		const defs: ToolDefinition[] = mcpTools.map((tool) => ({
-			name: `mcp_${safeServerName}_${sanitizeMcpName(tool.name)}`,
-			label: `mcp.${serverName}.${tool.name}`,
-			description: tool.description
-				? `${tool.description} (from MCP server "${serverName}")`
-				: `Tool from MCP server "${serverName}"`,
-			promptSnippet: tool.description
-				? `[${serverName}] ${tool.description.split("\n")[0]}`
-				: `[${serverName}] ${tool.name}`,
-			parameters: toTypeBox(tool.inputSchema),
-			renderShell: "default" as const,
-			execute: async (_id, params, signal) => {
-				if (!client.isConnected) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: `MCP server "${serverName}" is disconnected. Use /mcp to check status.`,
-							},
-						],
-						details: { error: "disconnected" },
-					} satisfies AgentToolResult<unknown>;
-				}
-				try {
-					const result = await client.callTool(tool.name, params as Record<string, unknown>, signal);
-					const text = result.content
-						.map((item) => (item.type === "text" && item.text ? item.text : `[Image: ${item.mimeType}]`))
-						.join("\n");
-					return {
-						content: [{ type: "text" as const, text }],
-						details: result,
-					} satisfies AgentToolResult<unknown>;
-				} catch (error) {
-					const msg = error instanceof Error ? error.message : String(error);
-					return {
-						content: [{ type: "text" as const, text: `MCP tool error: ${msg}` }],
-						details: { error: msg },
-					} satisfies AgentToolResult<unknown>;
-				}
-			},
-		}));
+		const perToolTimeout = this.toolTimeoutMap.get(serverName);
+
+		const defs: ToolDefinition[] = mcpTools.map((tool) => {
+			// Resolve effective timeout: per-tool > server default > client default (120s)
+			const toolSpecificTimeoutMs = perToolTimeout?.get(tool.name);
+
+			return {
+				name: `mcp_${safeServerName}_${sanitizeMcpName(tool.name)}`,
+				label: `mcp.${serverName}.${tool.name}`,
+				description: tool.description
+					? `${tool.description} (from MCP server "${serverName}")`
+					: `Tool from MCP server "${serverName}"`,
+				promptSnippet: tool.description
+					? `[${serverName}] ${tool.description.split("\n")[0]}`
+					: `[${serverName}] ${tool.name}`,
+				parameters: toTypeBox(tool.inputSchema),
+				renderShell: "default" as const,
+				execute: async (_id, params, signal) => {
+					if (!client.isConnected) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `MCP server "${serverName}" is disconnected. Use /mcp to check status.`,
+								},
+							],
+							details: { error: "disconnected" },
+						} satisfies AgentToolResult<unknown>;
+					}
+					try {
+						// If a per-tool timeout is configured, race it with the caller's signal
+						const effectiveSignal =
+							toolSpecificTimeoutMs !== undefined
+								? AbortSignal.any([AbortSignal.timeout(toolSpecificTimeoutMs), ...(signal ? [signal] : [])])
+								: signal;
+						const result = await client.callTool(tool.name, params as Record<string, unknown>, effectiveSignal);
+						const text = result.content
+							.map((item) => (item.type === "text" && item.text ? item.text : `[Image: ${item.mimeType}]`))
+							.join("\n");
+						return {
+							content: [{ type: "text" as const, text }],
+							details: result,
+						} satisfies AgentToolResult<unknown>;
+					} catch (error) {
+						const msg = error instanceof Error ? error.message : String(error);
+						return {
+							content: [{ type: "text" as const, text: `MCP tool error: ${msg}` }],
+							details: { error: msg },
+						} satisfies AgentToolResult<unknown>;
+					}
+				},
+			};
+		});
 		this.tools.set(serverName, defs);
 	}
 
