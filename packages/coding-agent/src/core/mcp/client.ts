@@ -6,6 +6,8 @@ export type { MCPServerConfig };
 
 /** Default MCP tool call timeout: 2 minutes */
 const DEFAULT_MCP_TIMEOUT_MS = 120_000;
+/** MCP connection handshake timeout: 30 seconds */
+const MCP_CONNECT_TIMEOUT_MS = 30_000;
 
 type PendingRequest = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
@@ -33,16 +35,26 @@ export class MCPClient {
 		}
 
 		const transport = resolveTransport(config);
-		if (transport === "stdio") {
-			await this.connectStdio(config);
-		} else {
-			await this.connectHttp(config, transport);
+
+		// Use a shorter timeout for the connection handshake
+		// (server startup via npx, dependency downloads, etc.)
+		const savedTimeout = this.timeoutMs;
+		this.timeoutMs = Math.min(this.timeoutMs, MCP_CONNECT_TIMEOUT_MS);
+		try {
+			if (transport === "stdio") {
+				await this.connectStdio(config);
+			} else {
+				await this.connectHttp(config, transport);
+			}
+			await this.send("initialize", {
+				protocolVersion: "2024-11-05",
+				capabilities: {},
+				clientInfo: { name: "pi", version: "1.0.0" },
+			});
+		} finally {
+			// Restore the configured timeout for subsequent tool calls
+			this.timeoutMs = savedTimeout;
 		}
-		await this.send("initialize", {
-			protocolVersion: "2024-11-05",
-			capabilities: {},
-			clientInfo: { name: "pi", version: "1.0.0" },
-		});
 	}
 
 	private async connectStdio(config: MCPServerConfig): Promise<void> {
