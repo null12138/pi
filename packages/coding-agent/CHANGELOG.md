@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Per-tool MCP timeout via `toolTimeouts` map in server config (e.g. `{"search": 300000, "ping": 5000}`). Uses `AbortSignal.any()` to race per-tool timeout with caller's cancellation signal.
+
 ## [0.75.50] - 2026-05-30
 
 ### Added
