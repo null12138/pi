@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.50] - 2026-05-30
 
 ### Added
 - MCP auto-reconnect with exponential backoff: when an MCP server disconnects (process crash, network drop), pi automatically retries connection with configurable `maxAttempts` and `intervalMs`.
