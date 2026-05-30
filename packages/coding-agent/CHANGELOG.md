@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- MCP auto-reconnect with exponential backoff: when an MCP server disconnects (process crash, network drop), pi automatically retries connection with configurable `maxAttempts` and `intervalMs`.
+- Connection status tracking: `MCPManager.getAllStatuses()` and `AgentSession.getMcpStatuses()` expose real connection state per server.
+- Manual reconnect: `AgentSession.reconnectMcp(serverName)` for on-demand reconnection.
+- MCP selector now shows `connected`/`disconnected`/`reconnecting...` status using real connection state instead of inferring from tool names.
+
 ## [0.75.49] - 2026-05-30
 
 ### Fixed
