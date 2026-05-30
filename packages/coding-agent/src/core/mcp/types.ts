@@ -9,6 +9,8 @@ export interface MCPServerConfig {
 	url?: string;
 	transport?: "stdio" | "sse" | "http";
 	headers?: Record<string, string>;
+	/** Request timeout in milliseconds (default: 120000). 0 = no timeout. */
+	timeoutMs?: number;
 }
 
 export interface MCPResource {

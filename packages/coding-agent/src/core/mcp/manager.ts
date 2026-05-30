@@ -47,7 +47,7 @@ export class MCPManager {
 		for (const [serverName, config] of Object.entries(serverConfigs)) {
 			if (config.enabled === false) continue;
 			try {
-				const client = new MCPClient();
+				const client = new MCPClient(config.timeoutMs);
 				await client.connect(config);
 				const { tools: mcpTools } = await client.listTools();
 				this.clients.set(serverName, client);
@@ -64,10 +64,9 @@ export class MCPManager {
 						: `[${serverName}] ${tool.name}`,
 					parameters: toTypeBox(tool.inputSchema),
 					renderShell: "default" as const,
-					executionMode: "sequential" as const,
-					execute: async (_id, params, _signal) => {
+					execute: async (_id, params, signal) => {
 						try {
-							const result = await client.callTool(tool.name, params as Record<string, unknown>);
+							const result = await client.callTool(tool.name, params as Record<string, unknown>, signal);
 							const text = result.content
 								.map((item) => (item.type === "text" && item.text ? item.text : `[Image: ${item.mimeType}]`))
 								.join("\n");

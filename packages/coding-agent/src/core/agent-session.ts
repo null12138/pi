@@ -947,16 +947,17 @@ export class AgentSession {
 		const loadedContextFiles = this._resourceLoader.getAgentsFiles().agentsFiles;
 
 		// Collect MCP tools grouped by server name
+		// Uses the label field (mcp.<server>.<tool>) for reliable server name extraction
 		const mcpTools: Array<{ serverName: string; tools: Array<{ name: string; description: string }> }> = [];
 		const mcpServerMap = new Map<string, Array<{ name: string; description: string }>>();
 		for (const name of validToolNames) {
 			if (!name.startsWith("mcp_")) continue;
 			const def = this._toolDefinitions.get(name);
 			if (!def) continue;
-			// Parse mcp_<server>_<tool>
-			const rest = name.slice(4);
-			const underscoreIdx = rest.indexOf("_");
-			const serverName = underscoreIdx === -1 ? rest : rest.slice(0, underscoreIdx);
+			// Extract server name from label (mcp.<server>.<tool>)
+			const label = def.definition.label ?? "";
+			const labelParts = label.split(".");
+			const serverName = labelParts.length >= 3 ? labelParts.slice(1, -1).join(".") : label;
 			const desc = def.definition.description || `Tool from MCP server "${serverName}"`;
 			const existing = mcpServerMap.get(serverName);
 			if (existing) {

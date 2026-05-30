@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+- MCP tool calls now support configurable timeout via `timeoutMs` in server config (default: 120s). Use `0` to disable.
+- MCP client now accepts `AbortSignal` for tool calls, enabling proper cancellation from the agent loop.
+- System prompt now explicitly states that MCP tools with the `mcp_` prefix are regular callable tools.
+
+### Changed
+- MCP tool execution mode changed from `"sequential"` to default (parallel), matching built-in tools like read/write/bash.
+
+### Fixed
+- MCP server name extraction in prompt builder now parses the `label` field (`mcp.<server>.<tool>`) instead of fragile underscore-based tool name parsing, fixing incorrect server names when the sanitized name contains underscores.
+
 ## [0.75.47] - 2026-05-30
 
 ### Added

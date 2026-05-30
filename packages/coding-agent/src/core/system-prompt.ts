@@ -84,8 +84,10 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 			prompt += formatSkillsForPrompt(skills);
 		}
 
-		// Append MCP tools section
+		// Append MCP tools section — explicitly note these are callable function tools
 		if (providedMcpTools && providedMcpTools.length > 0) {
+			prompt +=
+				"\n\nThe MCP (Model Context Protocol) tools below are regular callable tools — use them just like any other tool listed above.";
 			prompt += formatMcpToolsForPrompt(providedMcpTools);
 		}
 
@@ -107,6 +109,9 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	const visibleTools = tools.filter((name) => !!toolSnippets?.[name]);
 	const toolsList =
 		visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets![name]}`).join("\n") : "(none)";
+
+	// Determine if any visible tool is an MCP tool
+	const hasMcpTools = visibleTools.some((name) => name.startsWith("mcp_"));
 
 	// Build guidelines based on which tools are actually available
 	const guidelinesList: string[] = [];
@@ -148,12 +153,15 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
+	const additionalToolsNote = hasMcpTools
+		? `
+MCP (Model Context Protocol) tools are regular callable tools with the mcp_ prefix — use them just like any other tool. Detailed descriptions are listed below.`
+		: "\nIn addition to the tools above, you may have access to other custom tools depending on the project.";
+
 	let prompt = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
 
 Available tools:
-${toolsList}
-
-In addition to the tools above, you may have access to other custom tools depending on the project.
+${toolsList}${additionalToolsNote}
 
 Guidelines:
 ${guidelines}
@@ -193,6 +201,7 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 
 	// Append MCP tools section
 	if (providedMcpTools && providedMcpTools.length > 0) {
+		prompt += "\n\nMCP tool details:";
 		prompt += formatMcpToolsForPrompt(providedMcpTools);
 	}
 
@@ -215,24 +224,18 @@ function xmlEscape(str: string): string {
 function formatMcpToolsForPrompt(
 	servers: Array<{ serverName: string; tools: Array<{ name: string; description: string }> }>,
 ): string {
-	const lines = [
-		"\n\nThe following MCP (Model Context Protocol) tools are available from connected servers:",
-		"",
-		"<available_mcp_tools>",
-	];
+	const lines: string[] = [];
 
 	for (const server of servers) {
-		lines.push(`  <server name="${xmlEscape(server.serverName)}">`);
+		lines.push(`\n<server name="${xmlEscape(server.serverName)}">`);
 		for (const tool of server.tools) {
-			lines.push("    <tool>");
-			lines.push(`      <name>${xmlEscape(tool.name)}</name>`);
-			lines.push(`      <description>${xmlEscape(tool.description)}</description>`);
-			lines.push("    </tool>");
+			lines.push("  <tool>");
+			lines.push(`    <name>${xmlEscape(tool.name)}</name>`);
+			lines.push(`    <description>${xmlEscape(tool.description)}</description>`);
+			lines.push("  </tool>");
 		}
-		lines.push("  </server>");
+		lines.push("</server>");
 	}
-
-	lines.push("</available_mcp_tools>");
 
 	return lines.join("\n");
 }

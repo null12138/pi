@@ -4,6 +4,9 @@ import type { MCPCallToolResult, MCPResource, MCPServerConfig, MCPToolDefinition
 
 export type { MCPServerConfig };
 
+/** Default MCP tool call timeout: 2 minutes */
+const DEFAULT_MCP_TIMEOUT_MS = 120_000;
+
 type PendingRequest = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 function resolveTransport(config: MCPServerConfig): "stdio" | "sse" | "http" {
@@ -18,8 +21,17 @@ export class MCPClient {
 	private requestId = 0;
 	private pending = new Map<number, PendingRequest>();
 	private sseEndpoint: string | null = null;
+	private timeoutMs: number;
+
+	constructor(timeoutMs?: number) {
+		this.timeoutMs = timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+	}
 
 	async connect(config: MCPServerConfig): Promise<void> {
+		if (config.timeoutMs !== undefined) {
+			this.timeoutMs = config.timeoutMs;
+		}
+
 		const transport = resolveTransport(config);
 		if (transport === "stdio") {
 			await this.connectStdio(config);
@@ -178,69 +190,133 @@ export class MCPClient {
 		return null;
 	}
 
-	private async send(method: string, params?: Record<string, unknown>): Promise<unknown> {
+	private async send(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
 		const id = ++this.requestId;
 		const body = JSON.stringify({ jsonrpc: "2.0", id, method, params });
 
 		if (this.process?.stdin) {
-			return new Promise((resolve, reject) => {
-				this.pending.set(id, { resolve, reject });
-				this.process!.stdin!.write(`${body}\n`);
+			return this.sendWithTimeout(id, body, signal, (_resolve, reject) => {
+				try {
+					this.process!.stdin!.write(`${body}\n`);
+				} catch (err) {
+					reject(err instanceof Error ? err : new Error(String(err)));
+				}
 			});
 		}
 
 		if (this.sseEndpoint) {
-			return new Promise((resolve, reject) => {
-				this.pending.set(id, { resolve, reject });
-				fetch(this.sseEndpoint!, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body,
-				})
-					.then(async (res) => {
-						const text = await res.text();
-						if (res.headers.get("content-type")?.includes("text/event-stream")) {
-							// SSE upgrade - response comes via event stream
-							return;
-						}
-						try {
-							const parsed = JSON.parse(text);
-							const handler = this.pending.get(id);
-							if (handler) {
-								this.pending.delete(id);
-								if (parsed.error) {
-									handler.reject(new Error(`MCP error: ${parsed.error.message}`));
-								} else {
-									handler.resolve(parsed.result);
-								}
-							}
-						} catch {
-							reject(new Error(`Invalid JSON response from MCP server`));
-						}
-					})
-					.catch(reject);
+			return this.sendWithTimeout(id, body, signal, async (resolve, reject) => {
+				try {
+					const timeoutMs = this.timeoutMs > 0 ? this.timeoutMs : undefined;
+					const res = await fetch(this.sseEndpoint!, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body,
+						signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
+					});
+					const text = await res.text();
+					if (res.headers.get("content-type")?.includes("text/event-stream")) {
+						// SSE upgrade - response comes via event stream
+						return;
+					}
+					const parsed = JSON.parse(text);
+					if (parsed.error) {
+						reject(new Error(`MCP error: ${parsed.error.message}`));
+					} else {
+						resolve(parsed.result);
+					}
+				} catch (err) {
+					if (err instanceof Error && err.name === "TimeoutError") {
+						reject(new Error(`MCP request timed out after ${this.timeoutMs}ms`));
+					} else {
+						reject(err instanceof Error ? err : new Error(String(err)));
+					}
+				}
 			});
 		}
 
 		throw new Error("MCP client not connected");
 	}
 
-	async listTools(): Promise<{ tools: MCPToolDefinition[] }> {
-		return (await this.send("tools/list")) as { tools: MCPToolDefinition[] };
+	/**
+	 * Wraps a request with timeout and AbortSignal support.
+	 * Registers the pending handler so that response lines resolve it,
+	 * and rejects if the timeout fires or the caller's signal aborts.
+	 */
+	private sendWithTimeout(
+		id: number,
+		_body: string,
+		signal: AbortSignal | undefined,
+		writer: (resolve: (v: unknown) => void, reject: (e: Error) => void) => void,
+	): Promise<unknown> {
+		return new Promise<unknown>((outerResolve, outerReject) => {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let done = false;
+
+			const cleanup = () => {
+				if (done) return;
+				done = true;
+				if (timer) clearTimeout(timer);
+				this.pending.delete(id);
+			};
+
+			const resolve = (v: unknown) => {
+				cleanup();
+				outerResolve(v);
+			};
+
+			const reject = (e: Error) => {
+				cleanup();
+				outerReject(e);
+			};
+
+			// Timeout (unless disabled by setting timeoutMs = 0)
+			if (this.timeoutMs > 0) {
+				timer = setTimeout(() => {
+					reject(new Error(`MCP request timed out after ${this.timeoutMs}ms`));
+				}, this.timeoutMs);
+			}
+
+			// Caller abort signal
+			if (signal) {
+				if (signal.aborted) {
+					reject(new DOMException("MCP request cancelled", "AbortError"));
+					return;
+				}
+				signal.addEventListener(
+					"abort",
+					() => {
+						reject(new DOMException("MCP request cancelled", "AbortError"));
+					},
+					{ once: true },
+				);
+			}
+
+			this.pending.set(id, { resolve, reject });
+
+			writer(resolve, reject);
+		});
 	}
 
-	async listResources(): Promise<{ resources: MCPResource[] }> {
-		return (await this.send("resources/list")) as { resources: MCPResource[] };
+	async listTools(signal?: AbortSignal): Promise<{ tools: MCPToolDefinition[] }> {
+		return (await this.send("tools/list", undefined, signal)) as { tools: MCPToolDefinition[] };
 	}
 
-	async readResource(uri: string): Promise<{ contents: Array<{ uri: string; mimeType?: string; text?: string }> }> {
-		return (await this.send("resources/read", { uri })) as {
+	async listResources(signal?: AbortSignal): Promise<{ resources: MCPResource[] }> {
+		return (await this.send("resources/list", undefined, signal)) as { resources: MCPResource[] };
+	}
+
+	async readResource(
+		uri: string,
+		signal?: AbortSignal,
+	): Promise<{ contents: Array<{ uri: string; mimeType?: string; text?: string }> }> {
+		return (await this.send("resources/read", { uri }, signal)) as {
 			contents: Array<{ uri: string; mimeType?: string; text?: string }>;
 		};
 	}
 
-	async callTool(name: string, args: Record<string, unknown>): Promise<MCPCallToolResult> {
-		return (await this.send("tools/call", { name, arguments: args })) as MCPCallToolResult;
+	async callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<MCPCallToolResult> {
+		return (await this.send("tools/call", { name, arguments: args }, signal)) as MCPCallToolResult;
 	}
 
 	async disconnect(): Promise<void> {

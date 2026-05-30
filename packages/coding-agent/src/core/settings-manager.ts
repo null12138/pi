@@ -124,6 +124,7 @@ export interface Settings {
 			url?: string;
 			transport?: "stdio" | "sse" | "http";
 			headers?: Record<string, string>;
+			timeoutMs?: number;
 		}
 	>;
 }
