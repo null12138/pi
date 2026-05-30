@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- MCP connection handshake now uses a separate 30s timeout (instead of the configured tool call timeout), preventing slow server startup (npx downloads/compilation) from blocking session initialization.
+
 ## [0.75.48] - 2026-05-30
 
 ### Added
