@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.47] - 2026-05-30
 
 ### Added
 - `/login` now supports OpenAI-compatible API providers: enter base URL, API key, and model name(s) to connect to any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, custom gateways, etc.). Config persisted in auth.json and auto-restored on restart.
