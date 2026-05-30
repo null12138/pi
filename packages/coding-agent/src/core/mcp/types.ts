@@ -1,6 +1,16 @@
 /**
  * MCP (Model Context Protocol) client types.
  */
+
+export interface MCPReconnectConfig {
+	/** Whether auto-reconnect is enabled (default: true) */
+	enabled?: boolean;
+	/** Maximum reconnection attempts before giving up (default: 5) */
+	maxAttempts?: number;
+	/** Delay between reconnection attempts in milliseconds (default: 5000) */
+	intervalMs?: number;
+}
+
 export interface MCPServerConfig {
 	enabled?: boolean;
 	command?: string;
@@ -11,7 +21,12 @@ export interface MCPServerConfig {
 	headers?: Record<string, string>;
 	/** Request timeout in milliseconds (default: 120000). 0 = no timeout. */
 	timeoutMs?: number;
+	/** Auto-reconnect configuration */
+	reconnect?: MCPReconnectConfig;
 }
+
+/** Connection status for an MCP server */
+export type MCPConnectionStatus = "connected" | "disconnected" | "reconnecting" | "disabled";
 
 export interface MCPResource {
 	uri: string;

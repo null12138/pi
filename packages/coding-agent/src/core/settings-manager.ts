@@ -125,6 +125,11 @@ export interface Settings {
 			transport?: "stdio" | "sse" | "http";
 			headers?: Record<string, string>;
 			timeoutMs?: number;
+			reconnect?: {
+				enabled?: boolean;
+				maxAttempts?: number;
+				intervalMs?: number;
+			};
 		}
 	>;
 }

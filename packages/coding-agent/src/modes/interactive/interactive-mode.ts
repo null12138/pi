@@ -5512,28 +5512,22 @@ export class InteractiveMode {
 		const configured = this.settingsManager.getMcpServers();
 
 		const buildItems = (): McpServerItem[] => {
-			const allTools = this.session.getAllTools();
-			const mcpTools = allTools.filter((t) => t.name.startsWith("mcp_"));
-			const cnt = new Map<string, number>();
-			for (const t of mcpTools) {
-				const rest = t.name.slice(4);
-				const idx = rest.indexOf("_");
-				const srv = idx === -1 ? rest : rest.slice(0, idx);
-				cnt.set(srv, (cnt.get(srv) ?? 0) + 1);
-			}
+			const statuses = this.session.getMcpStatuses();
+			const statusMap = new Map(statuses.map((s) => [s.serverName, s]));
 			return (configured ? Object.entries(configured) : []).map(([name, c]) => {
 				const disabled = c.enabled === false;
-				const connected = (cnt.get(name) ?? 0) > 0;
-				const transport = c.url ? (c.transport ?? "sse") : c.command ? "stdio" : "unknown";
+				const st = statusMap.get(name);
 				return {
 					name,
 					status: disabled
 						? ("disabled" as const)
-						: connected
+						: st?.status === "connected"
 							? ("connected" as const)
-							: ("disconnected" as const),
-					toolCount: cnt.get(name) ?? 0,
-					transport,
+							: st?.status === "reconnecting"
+								? ("disconnected" as const) // show as disconnected but will reconnect
+								: ("disconnected" as const),
+					toolCount: st?.toolCount ?? 0,
+					transport: c.url ? (c.transport ?? "sse") : c.command ? "stdio" : "unknown",
 				};
 			});
 		};

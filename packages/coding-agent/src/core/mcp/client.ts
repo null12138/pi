@@ -18,15 +18,25 @@ function resolveTransport(config: MCPServerConfig): "stdio" | "sse" | "http" {
 	return "stdio";
 }
 
+export type MCPDisconnectHandler = (reason: string) => void;
+
 export class MCPClient {
 	private process: ChildProcess | null = null;
 	private requestId = 0;
 	private pending = new Map<number, PendingRequest>();
 	private sseEndpoint: string | null = null;
 	private timeoutMs: number;
+	private _connected = false;
+
+	/** Called when the connection is lost unexpectedly */
+	onDisconnect: MCPDisconnectHandler | null = null;
 
 	constructor(timeoutMs?: number) {
 		this.timeoutMs = timeoutMs ?? DEFAULT_MCP_TIMEOUT_MS;
+	}
+
+	get isConnected(): boolean {
+		return this._connected;
 	}
 
 	async connect(config: MCPServerConfig): Promise<void> {
@@ -51,9 +61,24 @@ export class MCPClient {
 				capabilities: {},
 				clientInfo: { name: "pi", version: "1.0.0" },
 			});
+			this._connected = true;
 		} finally {
 			// Restore the configured timeout for subsequent tool calls
 			this.timeoutMs = savedTimeout;
+		}
+	}
+
+	private handleDisconnect(reason: string): void {
+		if (!this._connected) return;
+		this._connected = false;
+		this.pending.clear();
+		this.sseEndpoint = null;
+		this.process = null;
+
+		try {
+			this.onDisconnect?.(reason);
+		} catch {
+			// ignore errors from disconnect handler
 		}
 	}
 
@@ -101,6 +126,7 @@ export class MCPClient {
 					h.reject(new Error(`MCP server "${command}" exited with code ${code}`));
 				}
 				this.pending.clear();
+				this.handleDisconnect(`process exited with code ${code}`);
 			});
 
 			resolve();
@@ -120,42 +146,50 @@ export class MCPClient {
 			let buffer = "";
 
 			const processChunk = async () => {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					buffer += decoder.decode(value, { stream: true });
+				try {
+					while (true) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						buffer += decoder.decode(value, { stream: true });
 
-					const lines = buffer.split("\n");
-					buffer = lines.pop() ?? "";
+						const lines = buffer.split("\n");
+						buffer = lines.pop() ?? "";
 
-					for (const line of lines) {
-						if (line.startsWith("data: ")) {
-							const data = line.slice(6);
-							if (data.startsWith("{") && this.sseEndpoint === null) {
-								try {
-									const parsed = JSON.parse(data);
-									if (parsed.result) {
-										const handler = this.pending.get(parsed.id);
-										if (handler) {
-											this.pending.delete(parsed.id);
-											if (parsed.error) {
-												handler.reject(new Error(`MCP error: ${parsed.error.message}`));
-											} else {
-												handler.resolve(parsed.result);
+						for (const line of lines) {
+							if (line.startsWith("data: ")) {
+								const data = line.slice(6);
+								if (data.startsWith("{") && this.sseEndpoint === null) {
+									try {
+										const parsed = JSON.parse(data);
+										if (parsed.result) {
+											const handler = this.pending.get(parsed.id);
+											if (handler) {
+												this.pending.delete(parsed.id);
+												if (parsed.error) {
+													handler.reject(new Error(`MCP error: ${parsed.error.message}`));
+												} else {
+													handler.resolve(parsed.result);
+												}
 											}
 										}
+									} catch {
+										/* skip */
 									}
-								} catch {
-									/* skip */
+								} else if (data.startsWith("http")) {
+									// This is the endpoint URL
 								}
-							} else if (data.startsWith("http")) {
-								// This is the endpoint URL
+							} else if (line.startsWith("event: endpoint")) {
+								// Next data line will be the endpoint URL
 							}
-						} else if (line.startsWith("event: endpoint")) {
-							// Next data line will be the endpoint URL
 						}
 					}
+				} catch (err) {
+					// Stream error means connection lost
+					this.handleDisconnect(err instanceof Error ? err.message : String(err));
+					return;
 				}
+				// Stream ended normally
+				this.handleDisconnect("SSE stream ended");
 			};
 
 			// Wait for endpoint event
@@ -167,7 +201,7 @@ export class MCPClient {
 			}
 
 			// Start background reader
-			processChunk().catch(() => {});
+			processChunk();
 		} else {
 			// Streamable HTTP - POST to URL directly, server responds with JSON or upgrades to SSE
 			this.sseEndpoint = url;
@@ -332,6 +366,8 @@ export class MCPClient {
 	}
 
 	async disconnect(): Promise<void> {
+		this._connected = false;
+		this.onDisconnect = null;
 		const proc = this.process;
 		this.process = null;
 		this.pending.clear();

@@ -2151,9 +2151,22 @@ export class AgentSession {
 		}
 
 		this._mcpManager = new MCPManager();
+		this._mcpManager.onStatusChange = (_serverName, status) => {
+			if (status === "connected") {
+				// A server reconnected — refresh the tool registry
+				this._refreshMcpTools();
+			}
+		};
 		await this._mcpManager.start(mcpServers);
 
-		const mcpTools = this._mcpManager.getToolDefinitions();
+		this._refreshMcpTools();
+	}
+
+	private _refreshMcpTools(): void {
+		// Remove old MCP tool defs from _customTools
+		this._customTools = this._customTools.filter((t) => !t.name.startsWith("mcp_"));
+
+		const mcpTools = this._mcpManager?.getToolDefinitions() ?? [];
 		if (mcpTools.length > 0) {
 			this._customTools.push(...mcpTools);
 			this._refreshToolRegistry();
@@ -2163,6 +2176,16 @@ export class AgentSession {
 	/** Reload MCP servers after config changes (e.g. toggle enabled). */
 	async reloadMcp(): Promise<void> {
 		await this._initMcp();
+	}
+
+	/** Get MCP connection statuses (for UI display) */
+	getMcpStatuses(): Array<{ serverName: string; status: string; toolCount: number }> {
+		return this._mcpManager?.getAllStatuses() ?? [];
+	}
+
+	/** Manually trigger reconnection for a specific MCP server */
+	async reconnectMcp(serverName: string): Promise<void> {
+		await this._mcpManager?.reconnect(serverName);
 	}
 
 	private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {

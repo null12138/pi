@@ -10,7 +10,7 @@ import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
 export interface McpServerItem {
 	name: string;
-	status: "connected" | "disconnected" | "disabled";
+	status: "connected" | "disconnected" | "disabled" | "reconnecting";
 	toolCount: number;
 	transport: string;
 }
@@ -64,8 +64,10 @@ export class McpSelectorComponent extends Container {
 		switch (status) {
 			case "connected":
 				return theme.fg("success", "connected");
+			case "reconnecting":
+				return theme.fg("warning", "reconnecting...");
 			case "disconnected":
-				return theme.fg("warning", "disconnected");
+				return theme.fg("error", "disconnected");
 			case "disabled":
 				return theme.fg("muted", "disabled");
 		}
