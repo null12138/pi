@@ -29,7 +29,26 @@ export type OAuthCredential = {
 	type: "oauth";
 } & OAuthCredentials;
 
-export type AuthCredential = ApiKeyCredential | OAuthCredential;
+/**
+ * Configuration for an OpenAI-compatible provider stored in auth.json.
+ * On startup, these are auto-registered as dynamic providers.
+ */
+export interface OpenAICompatibleProviderInfo {
+	baseUrl: string;
+	models: Array<{ id: string; name: string }>;
+	/**
+	 * Compatibility overrides for the openai-completions API.
+	 * Optional; if not set, auto-detection from baseUrl applies.
+	 */
+	compat?: import("@openeryc/pi-ai").OpenAICompletionsCompat;
+}
+
+export type OpenAICompatibleCredential = {
+	type: "openai_compatible";
+	key: string;
+} & OpenAICompatibleProviderInfo;
+
+export type AuthCredential = ApiKeyCredential | OAuthCredential | OpenAICompatibleCredential;
 
 export type AuthStorageData = Record<string, AuthCredential>;
 
@@ -509,6 +528,10 @@ export class AuthStorage {
 			}
 		}
 
+		if (cred?.type === "openai_compatible") {
+			return resolveConfigValue(cred.key);
+		}
+
 		// Fall back to environment variable
 		const envKey = getEnvApiKey(providerId);
 		if (envKey) return envKey;
@@ -526,5 +549,24 @@ export class AuthStorage {
 	 */
 	getOAuthProviders() {
 		return getOAuthProviders();
+	}
+
+	/**
+	 * Get all OpenAI-compatible provider credentials.
+	 * These are stored in auth.json with type "openai_compatible".
+	 */
+	getOpenAICompatibleProviders(): Record<string, OpenAICompatibleProviderInfo & { key: string }> {
+		const result: Record<string, OpenAICompatibleProviderInfo & { key: string }> = {};
+		for (const [providerId, cred] of Object.entries(this.data)) {
+			if (cred?.type === "openai_compatible") {
+				result[providerId] = {
+					baseUrl: cred.baseUrl,
+					models: cred.models,
+					compat: cred.compat,
+					key: cred.key,
+				};
+			}
+		}
+		return result;
 	}
 }

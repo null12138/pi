@@ -595,7 +595,7 @@ describe("totalTokens field", () => {
 			"google/gemini-2.5-flash - should return totalTokens equal to sum of components",
 			{ retry: 3, timeout: 60000 },
 			async () => {
-				const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
+				const llm = getModel("google", "gemini-2.5-flash");
 
 				console.log(`\nVercel AI Gateway / ${llm.id}:`);
 				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: process.env.AI_GATEWAY_API_KEY });

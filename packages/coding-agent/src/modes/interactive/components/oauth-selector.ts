@@ -6,7 +6,7 @@ import { DynamicBorder } from "./dynamic-border.ts";
 export type AuthSelectorProvider = {
 	id: string;
 	name: string;
-	authType: "oauth" | "api_key";
+	authType: "oauth" | "api_key" | "openai_compatible";
 };
 
 /**

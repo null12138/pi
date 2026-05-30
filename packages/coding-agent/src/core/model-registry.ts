@@ -25,7 +25,7 @@ import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 import { getAgentDir } from "../config.ts";
-import type { AuthStatus, AuthStorage } from "./auth-storage.ts";
+import type { AuthStatus, AuthStorage, OpenAICompatibleProviderInfo } from "./auth-storage.ts";
 import { BUILT_IN_PROVIDER_DISPLAY_NAMES } from "./provider-display-names.ts";
 import {
 	clearConfigValueCache,
@@ -403,6 +403,9 @@ export class ModelRegistry {
 		}
 
 		this.models = combined;
+
+		// Register OpenAI-compatible providers stored in auth.json
+		this.loadOpenAICompatibleProviders();
 	}
 
 	/** Load built-in models and apply provider/model overrides */
@@ -436,6 +439,38 @@ export class ModelRegistry {
 				return model;
 			});
 		});
+	}
+
+	/**
+	 * Load OpenAI-compatible providers stored in auth.json (type "openai_compatible").
+	 * These are registered as dynamic providers with api="openai-completions".
+	 */
+	private loadOpenAICompatibleProviders(): void {
+		const providers = this.authStorage.getOpenAICompatibleProviders();
+		for (const [providerName, info] of Object.entries(providers)) {
+			this.storeProviderRequestConfig(providerName, { apiKey: info.key });
+
+			for (const modelDef of info.models) {
+				// Avoid duplicates if already registered via other mechanism
+				const exists = this.models.some((m) => m.provider === providerName && m.id === modelDef.id);
+				if (exists) continue;
+
+				this.models.push({
+					id: modelDef.id,
+					name: modelDef.name,
+					api: "openai-completions" as Api,
+					provider: providerName,
+					baseUrl: info.baseUrl,
+					reasoning: false,
+					input: ["text"],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: 128000,
+					maxTokens: 16384,
+					headers: undefined,
+					compat: info.compat,
+				} as Model<Api>);
+			}
+		}
 	}
 
 	/** Merge custom models into built-in list by provider+id (custom wins on conflicts). */
@@ -772,6 +807,43 @@ export class ModelRegistry {
 
 		const providerApiKey = this.providerRequestConfigs.get(provider)?.apiKey;
 		return providerApiKey ? resolveConfigValueUncached(providerApiKey) : undefined;
+	}
+
+	/**
+	 * Register an OpenAI-compatible provider from user input.
+	 * Unlike registerProvider(), this does NOT add to registeredProviders,
+	 * so logout works correctly: refresh() reads auth.json and skips deleted entries.
+	 */
+	configureOpenAICompatibleProvider(
+		providerId: string,
+		config: {
+			baseUrl: string;
+			apiKey: string;
+			models: Array<{ id: string; name: string }>;
+			compat?: OpenAICompatibleProviderInfo["compat"];
+		},
+	): void {
+		this.storeProviderRequestConfig(providerId, { apiKey: config.apiKey });
+
+		for (const modelDef of config.models) {
+			const exists = this.models.some((m) => m.provider === providerId && m.id === modelDef.id);
+			if (exists) continue;
+
+			this.models.push({
+				id: modelDef.id,
+				name: modelDef.name,
+				api: "openai-completions" as Api,
+				provider: providerId,
+				baseUrl: config.baseUrl,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 128000,
+				maxTokens: 16384,
+				headers: undefined,
+				compat: config.compat,
+			} as Model<Api>);
+		}
 	}
 
 	/**

@@ -93,6 +93,7 @@ import { parseGitUrl } from "../../utils/git.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
 import { getPiUserAgent } from "../../utils/pi-user-agent.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
+import { sleep } from "../../utils/sleep.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import { checkForNewPiVersion, type LatestPiRelease } from "../../utils/version-check.ts";
 import { ArminComponent } from "./components/armin.ts";
@@ -318,6 +319,16 @@ export class InteractiveMode {
 
 	// Shutdown state
 	private shutdownRequested = false;
+
+	// Goal runner state: auto-continues working on a session goal across turns,
+	// retries on errors, and survives process restarts via session persistence.
+	private goalRunnerEnabled = true;
+	private goalRunnerAbortController: AbortController | undefined = undefined;
+	private goalRunnerRetryAttempt = 0;
+	private goalRunnerStatusDisplayed = false;
+	private readonly GOAL_RUNNER_MAX_RETRIES = 10;
+	private readonly GOAL_RUNNER_BASE_DELAY_MS = 3000;
+	private readonly GOAL_RUNNER_TURN_DELAY_MS = 800;
 
 	// Extension UI state
 	private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
@@ -721,6 +732,19 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		await this.init();
 
+		// If resuming a session that has a goal, auto-continue from where it left off.
+		// This handles crash recovery and manual resume scenarios.
+		const resumedGoal = this.session.sessionGoal;
+		if (resumedGoal && this.session.state.messages.length > 0) {
+			this.goalRunnerEnabled = true;
+			this.chatContainer.addChild(new Spacer(1));
+			this.chatContainer.addChild(
+				new Text(theme.fg("dim", `Resuming goal: "${resumedGoal}" (${keyText("app.interrupt")} to pause)`), 1, 0),
+			);
+			this.ui.requestRender();
+			await this.goalRunnerContinuationLoop(resumedGoal);
+		}
+
 		// Start version check asynchronously
 		checkForNewPiVersion(this.version).then((newRelease) => {
 			if (newRelease) {
@@ -784,11 +808,20 @@ export class InteractiveMode {
 		// Main interactive loop
 		while (true) {
 			const userInput = await this.getUserInput();
+			this.goalRunnerEnabled = true; // Re-enable on any user input
 			try {
 				await this.session.prompt(userInput);
 			} catch (error: unknown) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 				this.showError(errorMessage);
+			}
+
+			// After the prompt completes (or errors), check if goal runner should auto-continue.
+			if (this.goalRunnerEnabled) {
+				const goal = this.session.sessionGoal;
+				if (goal) {
+					await this.goalRunnerContinuationLoop(goal);
+				}
 			}
 		}
 	}
@@ -2384,6 +2417,13 @@ export class InteractiveMode {
 		this.defaultEditor.onEscape = () => {
 			if (this.session.isStreaming) {
 				this.restoreQueuedMessagesToEditor({ abort: true });
+			} else if (this.goalRunnerAbortController) {
+				// Pause goal runner without clearing the goal
+				this.goalRunnerEnabled = false;
+				this.goalRunnerAbortController.abort();
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(new Text(theme.fg("dim", "Goal runner paused. Use /goal on to resume."), 1, 0));
+				this.ui.requestRender();
 			} else if (this.session.isBashRunning) {
 				this.session.abortBash();
 			} else if (this.isBashMode) {
@@ -4527,6 +4567,15 @@ export class InteractiveMode {
 			});
 		}
 
+		// Add synthetic entry for OpenAI-compatible custom endpoints (always available)
+		if (authType !== "oauth") {
+			options.push({
+				id: "__openai_compatible__",
+				name: "OpenAI Compatible",
+				authType: "api_key",
+			});
+		}
+
 		const filteredOptions = authType ? options.filter((option) => option.authType === authType) : options;
 		return filteredOptions.sort((a, b) => a.name.localeCompare(b.name));
 	}
@@ -4540,9 +4589,14 @@ export class InteractiveMode {
 			if (!credential) {
 				continue;
 			}
+			// For OpenAI-compatible providers, show the base URL as the display name
+			const name =
+				credential.type === "openai_compatible"
+					? `OpenAI Compatible (${credential.baseUrl})`
+					: this.session.modelRegistry.getProviderDisplayName(providerId);
 			options.push({
 				id: providerId,
-				name: this.session.modelRegistry.getProviderDisplayName(providerId),
+				name,
 				authType: credential.type,
 			});
 		}
@@ -4595,6 +4649,8 @@ export class InteractiveMode {
 
 					if (providerOption.authType === "oauth") {
 						await this.showLoginDialog(providerOption.id, providerOption.name);
+					} else if (providerOption.id === "__openai_compatible__") {
+						await this.showOpenAICompatibleLoginDialog();
 					} else if (providerOption.id === BEDROCK_PROVIDER_ID) {
 						this.showBedrockSetupDialog(providerOption.id, providerOption.name);
 					} else {
@@ -4780,6 +4836,83 @@ export class InteractiveMode {
 			const errorMsg = error instanceof Error ? error.message : String(error);
 			if (errorMsg !== "Login cancelled") {
 				this.showError(`Failed to save API key for ${providerName}: ${errorMsg}`);
+			}
+		}
+	}
+
+	private async showOpenAICompatibleLoginDialog(): Promise<void> {
+		const previousModel = this.session.model;
+		const providerId = `openai-compatible-${crypto.randomUUID().slice(0, 8)}`;
+		const providerName = "OpenAI Compatible";
+
+		const dialog = new LoginDialogComponent(
+			this.ui,
+			providerId,
+			(_success, _message) => {
+				// Completion handled below
+			},
+			providerName,
+			"Configure OpenAI Compatible Provider",
+		);
+
+		this.editorContainer.clear();
+		this.editorContainer.addChild(dialog);
+		this.ui.setFocus(dialog);
+		this.ui.requestRender();
+
+		const restoreEditor = () => {
+			this.editorContainer.clear();
+			this.editorContainer.addChild(this.editor);
+			this.ui.setFocus(this.editor);
+			this.ui.requestRender();
+		};
+
+		try {
+			const baseUrl = (await dialog.showPrompt("Enter base URL:", "http://localhost:11434/v1")).trim();
+			if (!baseUrl) {
+				throw new Error("Base URL cannot be empty.");
+			}
+
+			const apiKey = (await dialog.showPrompt("Enter API key (or leave blank for local endpoints):")).trim();
+
+			const modelNames = (await dialog.showPrompt("Enter model name(s) (comma-separated):", "llama3.1")).trim();
+			if (!modelNames) {
+				throw new Error("At least one model name is required.");
+			}
+
+			const models = modelNames
+				.split(",")
+				.map((s) => s.trim())
+				.filter((s) => s.length > 0)
+				.map((id) => ({
+					id,
+					name: id,
+				}));
+
+			const effectiveApiKey = apiKey || "not-needed";
+
+			// Immediately register the provider so models are available
+			this.session.modelRegistry.configureOpenAICompatibleProvider(providerId, {
+				baseUrl,
+				apiKey: effectiveApiKey,
+				models,
+			});
+
+			// Persist to auth.json so it survives restarts
+			this.session.modelRegistry.authStorage.set(providerId, {
+				type: "openai_compatible",
+				key: effectiveApiKey,
+				baseUrl,
+				models,
+			});
+
+			restoreEditor();
+			await this.completeProviderAuthentication(providerId, `${baseUrl}`, "api_key", previousModel);
+		} catch (error: unknown) {
+			restoreEditor();
+			const errorMsg = error instanceof Error ? error.message : String(error);
+			if (errorMsg !== "Login cancelled") {
+				this.showError(`Failed to configure OpenAI Compatible provider: ${errorMsg}`);
 			}
 		}
 	}
@@ -5221,9 +5354,14 @@ export class InteractiveMode {
 		const goal = text.replace(/^\/goal\s*/, "").trim();
 		if (!goal) {
 			const currentGoal = this.session.sessionGoal;
+			const runnerStatus = this.goalRunnerEnabled ? "enabled" : "paused";
 			if (currentGoal) {
 				this.chatContainer.addChild(new Spacer(1));
-				this.chatContainer.addChild(new Text(theme.fg("dim", `Session goal: ${currentGoal}`), 1, 0));
+				this.chatContainer.addChild(
+					new Text(theme.fg("dim", `Session goal: ${currentGoal} (goal runner: ${runnerStatus})`), 1, 0),
+				);
+				this.chatContainer.addChild(new Text(theme.fg("dim", `  /goal on  - enable goal runner`), 1, 0));
+				this.chatContainer.addChild(new Text(theme.fg("dim", `  /goal off - pause goal runner`), 1, 0));
 			} else {
 				this.showWarning("Usage: /goal <goal description>");
 			}
@@ -5231,10 +5369,102 @@ export class InteractiveMode {
 			return;
 		}
 
+		const lower = goal.toLowerCase();
+		if (lower === "on" || lower === "off") {
+			this.goalRunnerEnabled = lower === "on";
+			const currentGoal = this.session.sessionGoal;
+			if (currentGoal) {
+				const label = lower === "on" ? theme.fg("success", "enabled") : theme.fg("warning", "paused");
+				this.chatContainer.addChild(new Spacer(1));
+				this.chatContainer.addChild(
+					new Text(theme.fg("dim", `Goal runner ${label} for goal: "${currentGoal}"`), 1, 0),
+				);
+			} else {
+				this.showWarning("No goal is set. Use /goal <description> to set one first.");
+			}
+			this.ui.requestRender();
+			return;
+		}
+
 		this.session.setSessionGoal(goal);
+		this.goalRunnerEnabled = true;
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(theme.fg("dim", `Session goal set: ${goal}`), 1, 0));
 		this.ui.requestRender();
+	}
+
+	/**
+	 * Goal runner continuation loop.
+	 * After each turn completes, auto-prompts the agent to continue pursuing the goal.
+	 * Handles errors with exponential backoff and respects user interruption.
+	 * Survives crashes: on next startup, the persisted session goal triggers auto-resume.
+	 */
+	private async goalRunnerContinuationLoop(goal: string): Promise<void> {
+		// Abort any previous goal runner controller
+		this.goalRunnerAbortController?.abort();
+		this.goalRunnerAbortController = new AbortController();
+		const signal = this.goalRunnerAbortController.signal;
+
+		try {
+			while (this.goalRunnerEnabled && this.session.sessionGoal) {
+				if (signal.aborted) break;
+
+				// Small delay between turns so the user can see what happened
+				try {
+					await sleep(this.GOAL_RUNNER_TURN_DELAY_MS, signal);
+				} catch {
+					break;
+				}
+
+				if (signal.aborted) break;
+
+				// Skip if the agent is already streaming or compacting
+				if (this.session.isStreaming || this.session.isCompacting) {
+					continue;
+				}
+
+				// Show status on first iteration
+				if (!this.goalRunnerStatusDisplayed) {
+					this.goalRunnerStatusDisplayed = true;
+					this.showStatus(`Pursuing goal: "${goal}" (${keyText("app.interrupt")} to pause)`);
+				}
+
+				try {
+					await this.session.prompt(
+						`Continue pursuing the goal: "${goal}". If you have fully completed this goal, report what was accomplished. If you cannot make further progress, explain what blocked you.`,
+					);
+					// Successful turn completed, reset retry counter
+					this.goalRunnerRetryAttempt = 0;
+				} catch (error) {
+					this.goalRunnerRetryAttempt++;
+					const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+					if (this.goalRunnerRetryAttempt >= this.GOAL_RUNNER_MAX_RETRIES) {
+						this.goalRunnerEnabled = false;
+						this.showError(
+							`Goal runner paused after ${this.GOAL_RUNNER_MAX_RETRIES} consecutive errors. ` +
+								`Last error: ${errorMessage}. Use /goal on to resume.`,
+						);
+						break;
+					}
+
+					// Exponential backoff
+					const delay = this.GOAL_RUNNER_BASE_DELAY_MS * 2 ** (this.goalRunnerRetryAttempt - 1);
+					this.showStatus(
+						`Goal runner error, retrying in ${Math.ceil(delay / 1000)}s ` +
+							`(${this.goalRunnerRetryAttempt}/${this.GOAL_RUNNER_MAX_RETRIES})... (${keyText("app.interrupt")} to pause)`,
+					);
+					try {
+						await sleep(delay, signal);
+					} catch {
+						break;
+					}
+				}
+			}
+		} finally {
+			this.goalRunnerAbortController = undefined;
+			this.goalRunnerStatusDisplayed = false;
+		}
 	}
 
 	private handleSessionCommand(): void {
