@@ -5509,9 +5509,9 @@ export class InteractiveMode {
 	}
 
 	private showMcpSelector(highlightServer?: string): void {
-		const configured = this.settingsManager.getMcpServers();
-
 		const buildItems = (): McpServerItem[] => {
+			// Fetch fresh config each time so toggle reflects immediately
+			const configured = this.settingsManager.getMcpServers();
 			const statuses = this.session.getMcpStatuses();
 			const statusMap = new Map(statuses.map((s) => [s.serverName, s]));
 			return (configured ? Object.entries(configured) : []).map(([name, c]) => {
@@ -5524,7 +5524,7 @@ export class InteractiveMode {
 						: st?.status === "connected"
 							? ("connected" as const)
 							: st?.status === "reconnecting"
-								? ("disconnected" as const) // show as disconnected but will reconnect
+								? ("disconnected" as const)
 								: ("disconnected" as const),
 					toolCount: st?.toolCount ?? 0,
 					transport: c.url ? (c.transport ?? "sse") : c.command ? "stdio" : "unknown",
@@ -5547,6 +5547,7 @@ export class InteractiveMode {
 		}
 
 		if (highlightServer) {
+			const configured = this.settingsManager.getMcpServers();
 			const server = configured?.[highlightServer];
 			if (server) {
 				const currentEnabled = server.enabled !== false;
@@ -5560,10 +5561,10 @@ export class InteractiveMode {
 				"MCP Servers",
 				items,
 				async (name) => {
-					const server = configured?.[name];
+					const cur = this.settingsManager.getMcpServers();
+					const server = cur?.[name];
 					if (!server) return;
-					const currentEnabled = server.enabled !== false;
-					this.settingsManager.setMcpServerEnabled(name, !currentEnabled);
+					this.settingsManager.setMcpServerEnabled(name, server.enabled === false);
 					await this.session.reloadMcp();
 					selector.setItems(buildItems());
 				},
