@@ -62,13 +62,22 @@ export class MCPClient {
 		}
 	}
 
-	/** Reset all connection state (called on disconnect or intentional close). */
+	/** Reset all connection state (called on disconnect or intentional close).
+	 * Rejects all in-flight pending promises so tool calls don't hang. */
 	private resetState(reason: string): void {
 		if (!this._connected && !this.process && !this.sseReader) return;
 		this._connected = false;
 		this.process = null;
 		this.sseEndpoint = null;
 		this.sseReader = null;
+
+		// MUST reject all pending promises before clearing, or tool calls freeze
+		// until the 120s timeout fires. Collect entries first because rejecting
+		// may trigger cleanup() which deletes from the map during iteration.
+		const entries = [...this.pending.values()];
+		for (const entry of entries) {
+			entry.reject(new Error(`MCP disconnected: ${reason}`));
+		}
 		this.pending.clear();
 
 		try {
@@ -378,6 +387,9 @@ export class MCPClient {
 		this.sseReader = null;
 		this.sseEndpoint = null;
 		this._connected = false;
+		for (const [, entry] of this.pending) {
+			entry.reject(new Error("MCP client disconnected"));
+		}
 		this.pending.clear();
 
 		if (reader) {
