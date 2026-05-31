@@ -477,7 +477,7 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
 	// Validate session header
 	if (entries.length === 0) return entries;
 	const header = entries[0];
-	if (header.type !== "session" || typeof (header as any).id !== "string") {
+	if (header.type !== "session" || typeof ("id" in header ? header.id : undefined) !== "string") {
 		return [];
 	}
 
