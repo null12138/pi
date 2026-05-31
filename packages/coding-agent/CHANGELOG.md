@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.54] - 2026-05-31
 
 ### Changed
 - MCP server startup now connects all servers in parallel (`Promise.allSettled`) instead of sequentially, dramatically reducing startup time when multiple servers are configured.
