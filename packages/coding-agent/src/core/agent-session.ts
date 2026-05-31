@@ -2151,13 +2151,16 @@ export class AgentSession {
 		}
 
 		this._mcpManager = new MCPManager();
+
+		// Suppress per-server refresh during bulk startup; refresh once after
+		let batchInit = true;
 		this._mcpManager.onStatusChange = (_serverName, status) => {
-			if (status === "connected") {
-				// A server reconnected — refresh the tool registry
+			if (!batchInit && status === "connected") {
 				this._refreshMcpTools();
 			}
 		};
 		await this._mcpManager.start(mcpServers);
+		batchInit = false;
 
 		this._refreshMcpTools();
 	}
@@ -2173,8 +2176,23 @@ export class AgentSession {
 		}
 	}
 
-	/** Reload MCP servers after config changes (e.g. toggle enabled). */
-	async reloadMcp(): Promise<void> {
+	/** Reload MCP servers after config changes (e.g. toggle enabled).
+	 * If changedServer is provided, only that server is started/stopped
+	 * instead of restarting all servers. */
+	async reloadMcp(changedServer?: string): Promise<void> {
+		if (changedServer && this._mcpManager) {
+			const configs = this.settingsManager.getMcpServers();
+			const config = configs?.[changedServer];
+			if (!config || config.enabled === false) {
+				// Server was disabled — stop it
+				await this._mcpManager.stopServer(changedServer);
+			} else {
+				// Server was enabled — start it
+				await this._mcpManager.startServer(changedServer, config);
+			}
+			this._refreshMcpTools();
+			return;
+		}
 		await this._initMcp();
 	}
 

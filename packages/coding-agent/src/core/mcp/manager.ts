@@ -80,6 +80,7 @@ export class MCPManager {
 	}
 
 	async start(serverConfigs: Record<string, MCPServerConfig>): Promise<void> {
+		const pending: Array<Promise<void>> = [];
 		for (const [serverName, config] of Object.entries(serverConfigs)) {
 			if (config.enabled === false) {
 				this.setStatus(serverName, "disabled");
@@ -89,8 +90,41 @@ export class MCPManager {
 			if (config.toolTimeouts) {
 				this.toolTimeoutMap.set(serverName, new Map(Object.entries(config.toolTimeouts)));
 			}
-			await this.connectServer(serverName, config);
+			pending.push(this.connectServer(serverName, config));
 		}
+		// Connect all servers in parallel for faster startup
+		await Promise.allSettled(pending);
+	}
+
+	/** Start a single server (used by reloadMcp for targeted toggle). */
+	async startServer(serverName: string, config: MCPServerConfig): Promise<void> {
+		this.serverConfigs.set(serverName, config);
+		if (config.toolTimeouts) {
+			this.toolTimeoutMap.set(serverName, new Map(Object.entries(config.toolTimeouts)));
+		}
+		await this.connectServer(serverName, config);
+	}
+
+	/** Stop a single server without affecting others. */
+	async stopServer(serverName: string): Promise<void> {
+		// Cancel reconnect timer for this server
+		const timer = this.reconnectTimers.get(serverName);
+		if (timer) {
+			clearTimeout(timer);
+			this.reconnectTimers.delete(serverName);
+		}
+		this.reconnectAttempts.delete(serverName);
+		this.serverConfigs.delete(serverName);
+		this.toolTimeoutMap.delete(serverName);
+		this.tools.delete(serverName);
+
+		const client = this.clients.get(serverName);
+		if (client) {
+			client.onDisconnect = null;
+			this.clients.delete(serverName);
+			await client.disconnect().catch(() => {});
+		}
+		this.setStatus(serverName, "disabled");
 	}
 
 	private async connectServer(serverName: string, config: MCPServerConfig): Promise<void> {

@@ -5552,7 +5552,7 @@ export class InteractiveMode {
 			if (server) {
 				const currentEnabled = server.enabled !== false;
 				this.settingsManager.setMcpServerEnabled(highlightServer, !currentEnabled);
-				this.session.reloadMcp();
+				this.session.reloadMcp(highlightServer);
 			}
 		}
 
@@ -5565,7 +5565,7 @@ export class InteractiveMode {
 					const server = cur?.[name];
 					if (!server) return;
 					this.settingsManager.setMcpServerEnabled(name, server.enabled === false);
-					await this.session.reloadMcp();
+					await this.session.reloadMcp(name);
 					selector.setItems(buildItems());
 				},
 				() => done(),
