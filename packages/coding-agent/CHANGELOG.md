@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.75.53] - 2026-05-31
 
 ### Fixed
 - `/mcp` selector now fetches fresh config on each rebuild, so toggling a server on/off immediately updates the displayed status without needing Esc+reopen.
