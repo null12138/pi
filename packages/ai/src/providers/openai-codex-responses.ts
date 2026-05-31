@@ -1088,7 +1088,7 @@ async function* parseWebSocket(socket: WebSocketLike, signal?: AbortSignal): Asy
 	socket.addEventListener("message", onMessage);
 	socket.addEventListener("error", onError);
 	socket.addEventListener("close", onClose);
-	signal?.addEventListener("abort", onAbort);
+	signal?.addEventListener("abort", onAbort, { once: true });
 
 	try {
 		while (true) {
