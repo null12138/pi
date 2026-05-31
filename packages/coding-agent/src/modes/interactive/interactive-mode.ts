@@ -746,25 +746,31 @@ export class InteractiveMode {
 		}
 
 		// Start version check asynchronously
-		checkForNewPiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
-			}
-		});
+		checkForNewPiVersion(this.version)
+			.then((newRelease) => {
+				if (newRelease) {
+					this.showNewVersionNotification(newRelease);
+				}
+			})
+			.catch(() => {});
 
 		// Start package update check asynchronously
-		this.checkForPackageUpdates().then((updates) => {
-			if (updates.length > 0) {
-				this.showPackageUpdateNotification(updates);
-			}
-		});
+		this.checkForPackageUpdates()
+			.then((updates) => {
+				if (updates.length > 0) {
+					this.showPackageUpdateNotification(updates);
+				}
+			})
+			.catch(() => {});
 
 		// Check tmux keyboard setup asynchronously
-		this.checkTmuxKeyboardSetup().then((warning) => {
-			if (warning) {
-				this.showWarning(warning);
-			}
-		});
+		this.checkTmuxKeyboardSetup()
+			.then((warning) => {
+				if (warning) {
+					this.showWarning(warning);
+				}
+			})
+			.catch(() => {});
 
 		// Show startup warnings
 		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages } = this.options;
