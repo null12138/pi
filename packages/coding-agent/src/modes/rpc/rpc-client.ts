@@ -134,8 +134,12 @@ export class RpcClient {
 			});
 		});
 
-		this.process = null;
+		// Reject all pending requests before clearing, or they hang forever
+		for (const [, pending] of this.pendingRequests) {
+			pending.reject(new Error("RPC client disconnected"));
+		}
 		this.pendingRequests.clear();
+		this.process = null;
 	}
 
 	/**
