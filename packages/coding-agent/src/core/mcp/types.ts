@@ -37,21 +37,6 @@ export interface MCPResource {
 	mimeType?: string;
 }
 
-export interface MCPResourceTemplate {
-	uriTemplate: string;
-	name: string;
-	description?: string;
-}
-
-export interface MCPReadResourceResult {
-	contents: Array<{
-		uri: string;
-		mimeType?: string;
-		text?: string;
-		blob?: string;
-	}>;
-}
-
 export interface MCPToolDefinition {
 	name: string;
 	description?: string;

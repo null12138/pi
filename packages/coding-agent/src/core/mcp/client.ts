@@ -4,12 +4,10 @@ import type { MCPCallToolResult, MCPResource, MCPServerConfig, MCPToolDefinition
 
 export type { MCPServerConfig };
 
-/** Default MCP tool call timeout: 2 minutes */
 const DEFAULT_MCP_TIMEOUT_MS = 120_000;
-/** MCP connection handshake timeout: 30 seconds */
 const MCP_CONNECT_TIMEOUT_MS = 30_000;
 
-type PendingRequest = { resolve: (v: unknown) => void; reject: (e: Error) => void };
+type PendingEntry = { resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 function resolveTransport(config: MCPServerConfig): "stdio" | "sse" | "http" {
 	if (config.transport) return config.transport;
@@ -23,12 +21,12 @@ export type MCPDisconnectHandler = (reason: string) => void;
 export class MCPClient {
 	private process: ChildProcess | null = null;
 	private requestId = 0;
-	private pending = new Map<number, PendingRequest>();
+	private pending = new Map<number, PendingEntry>();
 	private sseEndpoint: string | null = null;
+	private sseReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 	private timeoutMs: number;
 	private _connected = false;
 
-	/** Called when the connection is lost unexpectedly */
 	onDisconnect: MCPDisconnectHandler | null = null;
 
 	constructor(timeoutMs?: number) {
@@ -45,9 +43,6 @@ export class MCPClient {
 		}
 
 		const transport = resolveTransport(config);
-
-		// Use a shorter timeout for the connection handshake
-		// (server startup via npx, dependency downloads, etc.)
 		const savedTimeout = this.timeoutMs;
 		this.timeoutMs = Math.min(this.timeoutMs, MCP_CONNECT_TIMEOUT_MS);
 		try {
@@ -63,31 +58,55 @@ export class MCPClient {
 			});
 			this._connected = true;
 		} finally {
-			// Restore the configured timeout for subsequent tool calls
 			this.timeoutMs = savedTimeout;
 		}
 	}
 
-	private handleDisconnect(reason: string): void {
-		if (!this._connected) return;
+	/** Reset all connection state (called on disconnect or intentional close). */
+	private resetState(reason: string): void {
+		if (!this._connected && !this.process && !this.sseReader) return;
 		this._connected = false;
-		this.pending.clear();
-		this.sseEndpoint = null;
 		this.process = null;
+		this.sseEndpoint = null;
+		this.sseReader = null;
+		this.pending.clear();
 
 		try {
 			this.onDisconnect?.(reason);
 		} catch {
-			// ignore errors from disconnect handler
+			/* ignore */
 		}
 	}
+
+	private processSseLine(line: string): void {
+		if (!line.startsWith("data: ")) return;
+		const data = line.slice(6);
+		if (!data.startsWith("{")) return;
+
+		try {
+			const parsed = JSON.parse(data);
+			if (parsed.id === undefined) return;
+			const handler = this.pending.get(parsed.id);
+			if (!handler) return;
+			this.pending.delete(parsed.id);
+			if (parsed.error) {
+				handler.reject(new Error(`MCP error: ${parsed.error.message}`));
+			} else {
+				handler.resolve(parsed.result);
+			}
+		} catch {
+			/* skip */
+		}
+	}
+
+	// ── stdio transport ──────────────────────────────────────────────
 
 	private async connectStdio(config: MCPServerConfig): Promise<void> {
 		const { command, args = [], env } = config;
 		if (!command) throw new Error("MCP stdio server requires 'command'");
 
 		const childEnv = env ? { ...process.env, ...env } : process.env;
-		return new Promise((resolve, reject) => {
+		return new Promise<void>((resolve, reject) => {
 			const proc = spawn(command, args, { env: childEnv, stdio: ["pipe", "pipe", "pipe"], shell: false });
 			this.process = proc;
 
@@ -122,16 +141,14 @@ export class MCPClient {
 			});
 
 			proc.on("exit", (code) => {
-				for (const [, h] of this.pending) {
-					h.reject(new Error(`MCP server "${command}" exited with code ${code}`));
-				}
-				this.pending.clear();
-				this.handleDisconnect(`process exited with code ${code}`);
+				this.resetState(`process exited with code ${code}`);
 			});
 
 			resolve();
 		});
 	}
+
+	// ── HTTP / SSE transport ─────────────────────────────────────────
 
 	private async connectHttp(config: MCPServerConfig, transport: "sse" | "http"): Promise<void> {
 		const { url, headers = {} } = config;
@@ -142,106 +159,81 @@ export class MCPClient {
 			if (!res.ok) throw new Error(`SSE connection failed: ${res.status} ${res.statusText}`);
 
 			const reader = res.body!.getReader();
+			this.sseReader = reader;
 			const decoder = new TextDecoder();
 			let buffer = "";
+			let endpointReceived = false;
 
-			const processChunk = async () => {
-				try {
-					while (true) {
-						const { done, value } = await reader.read();
-						if (done) break;
-						buffer += decoder.decode(value, { stream: true });
+			// Read SSE stream until we get the endpoint event or timeout
+			const deadline = Date.now() + MCP_CONNECT_TIMEOUT_MS;
+			while (Date.now() < deadline) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buffer += decoder.decode(value, { stream: true });
 
-						const lines = buffer.split("\n");
-						buffer = lines.pop() ?? "";
+				const lines = buffer.split("\n");
+				buffer = lines.pop() ?? "";
 
-						for (const line of lines) {
-							if (line.startsWith("data: ")) {
-								const data = line.slice(6);
-								if (data.startsWith("{") && this.sseEndpoint === null) {
-									try {
-										const parsed = JSON.parse(data);
-										if (parsed.result) {
-											const handler = this.pending.get(parsed.id);
-											if (handler) {
-												this.pending.delete(parsed.id);
-												if (parsed.error) {
-													handler.reject(new Error(`MCP error: ${parsed.error.message}`));
-												} else {
-													handler.resolve(parsed.result);
-												}
-											}
-										}
-									} catch {
-										/* skip */
-									}
-								} else if (data.startsWith("http")) {
-									// This is the endpoint URL
-								}
-							} else if (line.startsWith("event: endpoint")) {
-								// Next data line will be the endpoint URL
-							}
-						}
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i];
+					if (line.startsWith("event: endpoint") && i + 1 < lines.length && lines[i + 1].startsWith("data: ")) {
+						this.sseEndpoint = lines[i + 1].slice(6).trim();
+						endpointReceived = true;
+						break;
 					}
-				} catch (err) {
-					// Stream error means connection lost
-					this.handleDisconnect(err instanceof Error ? err.message : String(err));
-					return;
 				}
-				// Stream ended normally
-				this.handleDisconnect("SSE stream ended");
-			};
+				if (endpointReceived) break;
+			}
 
-			// Wait for endpoint event
-			const endpointLine = await this.readSSEEvent(reader, decoder);
-			if (endpointLine) {
-				this.sseEndpoint = endpointLine.startsWith("/") ? new URL(endpointLine, url).href : endpointLine;
-			} else {
+			if (!this.sseEndpoint) {
 				this.sseEndpoint = url;
 			}
 
-			// Start background reader
-			processChunk();
+			// Start background SSE reader for JSON-RPC responses
+			this.startSseReader(reader, decoder, buffer);
 		} else {
-			// Streamable HTTP - POST to URL directly, server responds with JSON or upgrades to SSE
 			this.sseEndpoint = url;
 		}
 	}
 
-	private async readSSEEvent(
+	/** Continuously read the SSE stream and dispatch JSON-RPC responses. */
+	private async startSseReader(
 		reader: ReadableStreamDefaultReader<Uint8Array>,
 		decoder: { decode(b?: Uint8Array, o?: { stream?: boolean }): string },
-	): Promise<string | null> {
-		let buffer = "";
-		const deadline = Date.now() + 10000;
-
-		while (Date.now() < deadline) {
-			const { value, done } = await reader.read();
-			if (done) break;
-			buffer += decoder.decode(value, { stream: true });
-
-			const lines = buffer.split("\n");
-			buffer = lines.pop() ?? "";
-
-			for (let i = 0; i < lines.length; i++) {
-				const line = lines[i];
-				if (line.startsWith("data: ") && lines[i - 1]?.startsWith("event: endpoint")) {
-					return line.slice(6).trim();
+		initialBuffer: string,
+	): Promise<void> {
+		let buffer = initialBuffer;
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) {
+					this.resetState("SSE stream ended");
+					return;
 				}
-				if (line.startsWith("event: endpoint") && lines[i + 1]?.startsWith("data: ")) {
-					return lines[i + 1].slice(6).trim();
+				buffer += decoder.decode(value, { stream: true });
+
+				const lines = buffer.split("\n");
+				buffer = lines.pop() ?? "";
+
+				for (const line of lines) {
+					if (line.startsWith("data: ")) {
+						this.processSseLine(line);
+					}
 				}
 			}
+		} catch (err) {
+			this.resetState(err instanceof Error ? err.message : String(err));
 		}
-		return null;
 	}
+
+	// ── JSON-RPC send ────────────────────────────────────────────────
 
 	private async send(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
 		const id = ++this.requestId;
 		const body = JSON.stringify({ jsonrpc: "2.0", id, method, params });
 
 		if (this.process?.stdin) {
-			return this.sendWithTimeout(id, body, signal, (_resolve, reject) => {
+			return this.withTimeout(id, signal, (_resolve, reject) => {
 				try {
 					this.process!.stdin!.write(`${body}\n`);
 				} catch (err) {
@@ -251,7 +243,7 @@ export class MCPClient {
 		}
 
 		if (this.sseEndpoint) {
-			return this.sendWithTimeout(id, body, signal, async (resolve, reject) => {
+			return this.withTimeout(id, signal, async (resolve, reject) => {
 				try {
 					const timeoutMs = this.timeoutMs > 0 ? this.timeoutMs : undefined;
 					const res = await fetch(this.sseEndpoint!, {
@@ -261,10 +253,14 @@ export class MCPClient {
 						signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
 					});
 					const text = await res.text();
+
+					// SSE transport: response comes via SSE stream, not HTTP response body
 					if (res.headers.get("content-type")?.includes("text/event-stream")) {
-						// SSE upgrade - response comes via event stream
+						// Response will be delivered via startSseReader → processSseLine
 						return;
 					}
+
+					// Streamable HTTP / direct response
 					const parsed = JSON.parse(text);
 					if (parsed.error) {
 						reject(new Error(`MCP error: ${parsed.error.message}`));
@@ -285,24 +281,36 @@ export class MCPClient {
 	}
 
 	/**
-	 * Wraps a request with timeout and AbortSignal support.
-	 * Registers the pending handler so that response lines resolve it,
-	 * and rejects if the timeout fires or the caller's signal aborts.
+	 * Register a pending request with timeout + abort signal support.
+	 * The pending entry stays alive until the response line arrives
+	 * (via stdio readline or SSE processSseLine), the timeout fires,
+	 * or the caller's AbortSignal fires.
+	 *
+	 * IMPORTANT: for SSE transport, the response arrives asynchronously
+	 * via startSseReader → processSseLine, so the pending entry here
+	 * is resolved by that path. The writer callback sends the POST request
+	 * and the SSE response is dispatched in processSseLine.
 	 */
-	private sendWithTimeout(
+	private withTimeout(
 		id: number,
-		_body: string,
 		signal: AbortSignal | undefined,
 		writer: (resolve: (v: unknown) => void, reject: (e: Error) => void) => void,
 	): Promise<unknown> {
 		return new Promise<unknown>((outerResolve, outerReject) => {
 			let timer: ReturnType<typeof setTimeout> | undefined;
-			let done = false;
+			let resolved = false;
 
 			const cleanup = () => {
-				if (done) return;
-				done = true;
+				if (resolved) return;
+				resolved = true;
 				if (timer) clearTimeout(timer);
+				if (signal) {
+					try {
+						signal.removeEventListener("abort", onAbort);
+					} catch {
+						/* ignore */
+					}
+				}
 				this.pending.delete(id);
 			};
 
@@ -316,33 +324,30 @@ export class MCPClient {
 				outerReject(e);
 			};
 
-			// Timeout (unless disabled by setting timeoutMs = 0)
+			const onAbort = () => {
+				reject(new DOMException("MCP request cancelled", "AbortError"));
+			};
+
 			if (this.timeoutMs > 0) {
 				timer = setTimeout(() => {
 					reject(new Error(`MCP request timed out after ${this.timeoutMs}ms`));
 				}, this.timeoutMs);
 			}
 
-			// Caller abort signal
 			if (signal) {
 				if (signal.aborted) {
 					reject(new DOMException("MCP request cancelled", "AbortError"));
 					return;
 				}
-				signal.addEventListener(
-					"abort",
-					() => {
-						reject(new DOMException("MCP request cancelled", "AbortError"));
-					},
-					{ once: true },
-				);
+				signal.addEventListener("abort", onAbort, { once: true });
 			}
 
 			this.pending.set(id, { resolve, reject });
-
 			writer(resolve, reject);
 		});
 	}
+
+	// ── Public API ───────────────────────────────────────────────────
 
 	async listTools(signal?: AbortSignal): Promise<{ tools: MCPToolDefinition[] }> {
 		return (await this.send("tools/list", undefined, signal)) as { tools: MCPToolDefinition[] };
@@ -366,12 +371,22 @@ export class MCPClient {
 	}
 
 	async disconnect(): Promise<void> {
-		this._connected = false;
 		this.onDisconnect = null;
 		const proc = this.process;
+		const reader = this.sseReader;
 		this.process = null;
-		this.pending.clear();
+		this.sseReader = null;
 		this.sseEndpoint = null;
+		this._connected = false;
+		this.pending.clear();
+
+		if (reader) {
+			try {
+				await reader.cancel();
+			} catch {
+				/* ignore */
+			}
+		}
 		if (proc && !proc.killed) {
 			proc.kill();
 			await new Promise<void>((resolve) => {

@@ -117,6 +117,8 @@ export class MCPManager {
 		this.serverConfigs.delete(serverName);
 		this.toolTimeoutMap.delete(serverName);
 		this.tools.delete(serverName);
+		// Also clean up resource URIs for this server
+		this.resourceUris = this.resourceUris.filter((u) => !u.startsWith(`mcp://${serverName}`));
 
 		const client = this.clients.get(serverName);
 		if (client) {
@@ -129,21 +131,35 @@ export class MCPManager {
 
 	private async connectServer(serverName: string, config: MCPServerConfig): Promise<void> {
 		this.setStatus(serverName, "reconnecting");
+		let disconnected = false;
+		const onDisconnect = () => {
+			if (disconnected) return;
+			disconnected = true;
+			this.setStatus(serverName, "disconnected");
+			this.tools.delete(serverName);
+			this.scheduleReconnect(serverName);
+		};
+
 		try {
 			const client = new MCPClient(config.timeoutMs);
-			client.onDisconnect = (_reason) => {
-				this.setStatus(serverName, "disconnected");
-				this.tools.delete(serverName);
-				this.scheduleReconnect(serverName);
-			};
+			client.onDisconnect = () => onDisconnect();
 
 			await client.connect(config);
+			// If disconnect happened during connect(), bail out
+			if (disconnected) {
+				this.clients.delete(serverName);
+				return;
+			}
+
 			const { tools: mcpTools } = await client.listTools();
+			if (disconnected) {
+				client.disconnect().catch(() => {});
+				return;
+			}
 			this.clients.set(serverName, client);
 
 			this.buildToolDefs(serverName, mcpTools);
 
-			// Discover resources
 			try {
 				const { resources } = await client.listResources();
 				for (const r of resources) {
@@ -153,15 +169,21 @@ export class MCPManager {
 				// Server may not support resources
 			}
 
+			if (disconnected) {
+				// Was disconnected during tool/resource discovery
+				client.disconnect().catch(() => {});
+				this.clients.delete(serverName);
+				this.tools.delete(serverName);
+				return;
+			}
+
 			this.setStatus(serverName, "connected");
 			this.reconnectAttempts.delete(serverName);
 		} catch (error) {
-			this.clients.delete(serverName);
+			onDisconnect();
 			console.warn(
 				`Failed to connect to MCP server "${serverName}": ${error instanceof Error ? error.message : String(error)}`,
 			);
-			this.setStatus(serverName, "disconnected");
-			this.scheduleReconnect(serverName);
 		}
 	}
 
@@ -174,23 +196,21 @@ export class MCPManager {
 			// Resolve effective timeout: per-tool > server default > client default (120s)
 			const toolSpecificTimeoutMs = perToolTimeout?.get(tool.name);
 
-			// Add optional _timeoutMs parameter so the AI can override timeout per-call
+			// Add optional _timeoutMs parameter so the AI can override timeout per-call.
+			// We must produce a flat properties schema (not allOf) because LLM providers
+			// access tool.parameters.properties directly.
 			const baseParams = toTypeBox(tool.inputSchema);
-			// Merge _timeoutMs into the existing schema (preserving required fields)
-			const existingProps = (baseParams as any).properties ?? {};
-			const existingRequired = (baseParams as any).required ?? [];
-			const parameters = Type.Object(
-				{
-					...existingProps,
-					_timeoutMs: Type.Optional(
-						Type.Number({
-							description:
-								"Optional timeout override in milliseconds for this specific call (e.g. 300000 for 5 min, 5000 for 5s). Overrides the server default timeout.",
-						}),
-					),
+			const baseSchema = baseParams as unknown as Record<string, unknown>;
+			const mergedProps = {
+				...((baseSchema.properties ?? {}) as Record<string, unknown>),
+				_timeoutMs: {
+					type: "number",
+					description:
+						"Optional timeout override in milliseconds for this specific call (e.g. 300000 for 5 min, 5000 for 5s). Overrides the server default timeout.",
 				},
-				{ required: existingRequired },
-			);
+			};
+			const mergedRequired = [...((baseSchema.required ?? []) as string[])];
+			const parameters = Type.Object(mergedProps, { required: mergedRequired });
 
 			return {
 				name: `mcp_${safeServerName}_${sanitizeMcpName(tool.name)}`,
@@ -273,7 +293,7 @@ export class MCPManager {
 		this.reconnectAttempts.set(serverName, attempt);
 		this.setStatus(serverName, "reconnecting");
 
-		const timer = setTimeout(async () => {
+		const timer = setTimeout(() => {
 			this.reconnectTimers.delete(serverName);
 			const cfg = this.serverConfigs.get(serverName);
 			if (!cfg) return;
@@ -282,11 +302,13 @@ export class MCPManager {
 			const oldClient = this.clients.get(serverName);
 			if (oldClient) {
 				oldClient.onDisconnect = null;
-				await oldClient.disconnect().catch(() => {});
+				oldClient.disconnect().catch(() => {});
 				this.clients.delete(serverName);
 			}
 
-			await this.connectServer(serverName, cfg);
+			this.connectServer(serverName, cfg).catch((err) =>
+				console.warn(`MCP reconnect failed for "${serverName}":`, err),
+			);
 		}, intervalMs * Math.min(attempt, 5)); // exponential backoff, cap at 5x
 
 		this.reconnectTimers.set(serverName, timer);
@@ -317,7 +339,6 @@ export class MCPManager {
 		await this.connectServer(serverName, config);
 	}
 
-	// Rebuild tool definitions for a server (used after reconnect to pick up any changes)
 	getToolDefinitions(): ToolDefinition[] {
 		return Array.from(this.tools.values()).flat();
 	}
@@ -328,16 +349,6 @@ export class MCPManager {
 
 	getResourceUris(): string[] {
 		return this.resourceUris;
-	}
-
-	async readResource(uri: string): Promise<string> {
-		const serverName = this.clients.keys().next().value;
-		if (!serverName) throw new Error("No MCP servers connected");
-		const mcpUri = uri.startsWith(`mcp://${serverName}`) ? uri.slice(`mcp://${serverName}`.length) : uri;
-		const client = this.clients.get(serverName);
-		if (!client) throw new Error(`MCP server "${serverName}" not connected`);
-		const result = await client.readResource(mcpUri);
-		return result.contents.map((c) => c.text ?? "").join("\n");
 	}
 
 	async stop(): Promise<void> {
