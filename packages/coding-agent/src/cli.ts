@@ -13,6 +13,11 @@ process.title = APP_NAME;
 process.env.PI_CODING_AGENT = "true";
 process.emitWarning = (() => {}) as typeof process.emitWarning;
 
+// Catch unhandled promise rejections so they don't crash the process silently
+process.on("unhandledRejection", (reason) => {
+	console.error("[Unhandled Promise Rejection]", reason instanceof Error ? reason.message : String(reason));
+});
+
 // Configure undici's global dispatcher before provider SDKs issue requests.
 // Runtime settings are applied once SettingsManager has loaded global/project settings.
 configureHttpDispatcher();
