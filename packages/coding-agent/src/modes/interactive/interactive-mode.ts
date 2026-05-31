@@ -5508,7 +5508,7 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private showMcpSelector(highlightServer?: string): void {
+	private async showMcpSelector(highlightServer?: string): Promise<void> {
 		const buildItems = (): McpServerItem[] => {
 			// Fetch fresh config each time so toggle reflects immediately
 			const configured = this.settingsManager.getMcpServers();
@@ -5532,6 +5532,16 @@ export class InteractiveMode {
 			});
 		};
 
+		if (highlightServer) {
+			const configured = this.settingsManager.getMcpServers();
+			const server = configured?.[highlightServer];
+			if (server) {
+				const currentEnabled = server.enabled !== false;
+				this.settingsManager.setMcpServerEnabled(highlightServer, !currentEnabled);
+				await this.session.reloadMcp(highlightServer);
+			}
+		}
+
 		const items = buildItems();
 		if (items.length === 0) {
 			this.chatContainer.addChild(new Spacer(1));
@@ -5544,16 +5554,6 @@ export class InteractiveMode {
 			);
 			this.ui.requestRender();
 			return;
-		}
-
-		if (highlightServer) {
-			const configured = this.settingsManager.getMcpServers();
-			const server = configured?.[highlightServer];
-			if (server) {
-				const currentEnabled = server.enabled !== false;
-				this.settingsManager.setMcpServerEnabled(highlightServer, !currentEnabled);
-				this.session.reloadMcp(highlightServer);
-			}
 		}
 
 		this.showSelector((done) => {
